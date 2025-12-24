@@ -174,14 +174,20 @@ FIELDS: list of field index."
   (not (string= (aref (cadr entry) 1) "-")))
 
 
+(defun achive-trading-time-p ()
+  "Check if current time is within stock trading hours.
+Returns t if time is between 9:00-11:30 or 13:00-15:00."
+  (or (and (not (achive-compare-time "9:00")) (achive-compare-time "11:30"))
+      (and (not (achive-compare-time "13:00")) (achive-compare-time "15:00"))))
+
+
 (defun achive-working-time-p (buffer-name)
   "Whether it is working time or not.
 If at 9:00 - 11:30 or 13:00 - 15:00 and visual buffer named
 BUFFER-NAME is existing,
 return t. Otherwise, return nil."
   (if (get-buffer-window buffer-name)
-      (or (and (not (achive-compare-time "9:00")) (achive-compare-time "11:30"))
-          (and (not (achive-compare-time "13:00")) (achive-compare-time "15:00")))
+      (achive-trading-time-p)
     nil))
 
 

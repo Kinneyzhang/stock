@@ -95,6 +95,26 @@ If it's nil will be low-key, you can peek at it at company time."
   :group 'achive
   :type 'string)
 
+
+(defcustom achive-modeline-stocks nil
+  "List of stock codes to display in mode-line.
+Example: \\='(\"sh600036\" \"sz000625\")."
+  :group 'achive
+  :type '(repeat string))
+
+
+(defcustom achive-modeline-refresh-seconds 10
+  "Seconds between mode-line refresh."
+  :group 'achive
+  :type 'integer)
+
+
+(defcustom achive-modeline-format " [%n:%p] "
+  "Format string for each stock in mode-line.
+%n - stock name, %p - change percent."
+  :group 'achive
+  :type 'string)
+
 ;;;;; faces
 
 (defface achive-face-up
@@ -165,6 +185,18 @@ If it's nil will be low-key, you can peek at it at company time."
 
 (defvar achive-entry-list nil
   "Cache data for manual render.")
+
+
+(defvar achive-modeline-string ""
+  "String to display in mode-line.")
+
+
+(defvar achive-modeline-timer nil
+  "Timer for mode-line refresh.")
+
+
+(defvar achive-modeline-data nil
+  "Cached stock data for mode-line display.")
 
 ;;;;; functions
 
@@ -442,6 +474,126 @@ CODES: string of stocks list."
   (add-hook 'tabulated-list-revert-hook 'achive-refresh nil t)
   (tabulated-list-init-header)
   (tablist-minor-mode))
+
+
+;;;;; mode-line functions
+
+(defun achive-modeline-format-stock (entry)
+  "Format a single stock ENTRY for mode-line display."
+  (let* ((data (cadr entry))
+         (name (aref data 1))
+         (percent (aref data 3))
+         (percent-number (string-to-number percent))
+         (face (cond
+                ((> percent-number 0) 'achive-face-up)
+                ((< percent-number 0) 'achive-face-down)
+                (t 'achive-face-constant)))
+         (formatted (replace-regexp-in-string
+                     "%n" name
+                     (replace-regexp-in-string
+                      "%p" percent
+                      achive-modeline-format))))
+    (propertize formatted 'face face)))
+
+
+(defun achive-modeline-update-string (entries)
+  "Update `achive-modeline-string' with stock ENTRIES data."
+  (setq achive-modeline-data entries)
+  (setq achive-modeline-string
+        (if entries
+            (mapconcat #'achive-modeline-format-stock entries "")
+          ""))
+  (force-mode-line-update t))
+
+
+(defun achive-modeline-fetch ()
+  "Fetch stock data for mode-line display."
+  (when achive-modeline-stocks
+    (achive-request
+     (achive-make-request-url achive-api achive-modeline-stocks)
+     (lambda ()
+       (let ((entries (seq-filter
+                       #'achive-valid-entry-p
+                       (achive-format-content achive-modeline-stocks
+                                              (achive-parse-response)))))
+         (achive-modeline-update-string entries))))))
+
+
+(defun achive-modeline-loop-refresh (_timer)
+  "Loop to refresh mode-line stock data."
+  (when achive-modeline-timer
+    (if (and (achive-weekday-p)
+             (achive-trading-time-p))
+        (achive-modeline-fetch))
+    (achive-modeline-handle-refresh)))
+
+
+(defun achive-modeline-handle-refresh ()
+  "Schedule next mode-line refresh."
+  (when achive-modeline-timer
+    (achive-set-timeout #'achive-modeline-loop-refresh
+                        achive-modeline-refresh-seconds)))
+
+
+;;;###autoload
+(defun achive-modeline-mode (&optional arg)
+  "Toggle stock display in mode-line.
+With prefix ARG, enable if ARG is positive, disable otherwise."
+  (interactive "P")
+  (let ((enable (if arg
+                    (> (prefix-numeric-value arg) 0)
+                  (not achive-modeline-timer))))
+    (if enable
+        (progn
+          (unless achive-modeline-stocks
+            (setq achive-modeline-stocks achive-stock-list))
+          (unless (member '(:eval achive-modeline-string) global-mode-string)
+            (if global-mode-string
+                (push '(:eval achive-modeline-string) global-mode-string)
+              (setq global-mode-string '("" (:eval achive-modeline-string)))))
+          (setq achive-modeline-timer t)
+          (achive-modeline-fetch)
+          (achive-modeline-handle-refresh)
+          (message "Achive mode-line enabled."))
+      (setq achive-modeline-timer nil)
+      (setq achive-modeline-string "")
+      (setq global-mode-string
+            (delete '(:eval achive-modeline-string) global-mode-string))
+      (force-mode-line-update t)
+      (message "Achive mode-line disabled."))))
+
+
+;;;###autoload
+(defun achive-modeline-add (codes)
+  "Add stocks to mode-line display by CODES."
+  (interactive "sPlease input stock codes to add to mode-line: ")
+  (let ((code-list (split-string codes)))
+    (achive-validate-request
+     code-list
+     (lambda (resp)
+       (let ((valid-codes (mapcar #'car resp)))
+         (when valid-codes
+           (setq achive-modeline-stocks
+                 (delete-dups (append achive-modeline-stocks valid-codes)))
+           (achive-modeline-fetch)
+           (message "[%s] added to mode-line."
+                    (mapconcat 'identity valid-codes ", "))))))))
+
+
+;;;###autoload
+(defun achive-modeline-remove ()
+  "Remove a stock from mode-line display."
+  (interactive)
+  (if (null achive-modeline-stocks)
+      (message "No stocks in mode-line.")
+    (let* ((code (completing-read "Select stock to remove from mode-line: "
+                                  achive-modeline-stocks nil t))
+           (index (cl-position code achive-modeline-stocks :test 'string=)))
+      (when index
+        (setq achive-modeline-stocks
+              (achive-remove-nth-element achive-modeline-stocks index))
+        (achive-modeline-fetch)
+        (message "<%s> removed from mode-line." code)))))
 
 
 (provide 'achive)

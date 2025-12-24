@@ -37,6 +37,9 @@ Download el file to your load-path.
 | achive-refresh-seconds    | 5                                       | integer | Seconds of automatic refresh time.                                                      |
 | achive-cache-path         | (concat user-emacs-directory ".achive") | string  | Path of cache.                                                                          |
 | achive-colouring          | t                                       | boolean | Whether to apply face. If it's nil will be low-key, you can peek at it at company time. |
+| achive-modeline-stocks    | nil                                     | list    | List of stock codes to display in mode-line.                                            |
+| achive-modeline-refresh-seconds | 10                                 | integer | Seconds between mode-line refresh.                                                      |
+| achive-modeline-format    | " [%n:%p] "                             | string  | Format string for each stock in mode-line. %n=name, %p=change percent.                  |
 
 * Command
 | Command                 | Description                                          |
@@ -47,6 +50,20 @@ Download el file to your load-path.
 | achive-add              | Add favorite stocks by codes                         |
 | achive-remove           | Remove favorite stocks.                              |
 | achive-switch-colouring | Manual switch colouring. It's handy for emergencies. |
+| achive-modeline-mode    | Toggle stock price display in mode-line.             |
+| achive-modeline-add     | Add stocks to mode-line display.                     |
+| achive-modeline-remove  | Remove a stock from mode-line display.               |
+
+* Mode-line Display
+You can display real-time stock price changes directly in the mode-line.
+
+#+BEGIN_SRC lisp
+  ;; Configure stocks to show in mode-line
+  (setq achive-modeline-stocks '("sh600036" "sz000625"))
+  
+  ;; Enable mode-line display
+  (achive-modeline-mode 1)
+#+END_SRC
 
 * For traders
 #+BEGIN_QUOTE
