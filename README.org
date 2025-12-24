@@ -1,74 +1,69 @@
-#+TITLE:A-Chive
+#+TITLE: Stock in emacs
 
-#+BEGIN_QUOTE
-Achive - a chive, means a chive in the A-shares.
-#+END_QUOTE
-
-Achive is a plug-in based on api of Sina that creates a dashboard displaying real-time data of a-share indexs and stocks.
-Thanks for the super-fast Sina api, achive performs so well to update data automatically.
-
+Stock is a plug-in based on api of Sina that creates a dashboard displaying real-time data of a-share indexs and stocks.
+Thanks for the super-fast Sina api, stock performs so well to update data automatically.
 
 * Screencast
-[[./imgs/achive.png]]
+[[./imgs/stock.png]]
 
 * Installation
 Download el file to your load-path.
 
 * Usage
 #+BEGIN_SRC lisp
-  (use-package achive
-    :load-path "~/.emacs.d/site-lisp/achive"
+  (use-package stock
+    :load-path "~/.emacs.d/site-lisp/stock"
     :bind
-    ("C-c a a" . achive)
+    ("C-c a a" . stock)
     :custom
-    (achive-auto-refresh t)
-    (achive-refresh-seconds 5)
-    (achive-stock-list '("sh600036" "sh601012" "sz000625" "sz002050" "sz002013" "sh600176")))
+    (stock-auto-refresh t)
+    (stock-refresh-seconds 5)
+    (stock-code-list '("sh600036" "sh601012" "sz000625" "sz002050" "sz002013" "sh600176")))
 #+END_SRC
 
 * Customization
 | Variable                  | Default                                 | type    | Description                                                                             |
 |---------------------------+-----------------------------------------+---------+-----------------------------------------------------------------------------------------|
-| achive-index-list         | '("sh000001" "sz399001" "sz399006")     | list    | List of composite index.                                                                |
-| achive-stock-list         | '("sh600036" "sz000625")                | list    | List of stocks.                                                                         |
-| achive-buffer-name        | "*A Chive*"                               | string  | Buffer name of achive board.                                                            |
-| achive-search-buffer-name | "*A Chive - results -*"                   | string  | Buffer name of achive search board.                                                     |
-| achive-auto-refresh       | t                                       | boolean | Whether to refresh automatically.                                                       |
-| achive-refresh-seconds    | 5                                       | integer | Seconds of automatic refresh time.                                                      |
-| achive-cache-path         | (concat user-emacs-directory ".achive") | string  | Path of cache.                                                                          |
-| achive-colouring          | t                                       | boolean | Whether to apply face. If it's nil will be low-key, you can peek at it at company time. |
-| achive-modeline-stocks    | nil                                     | list    | List of stock codes to display in mode-line.                                            |
-| achive-modeline-refresh-seconds | 10                                 | integer | Seconds between mode-line refresh.                                                      |
-| achive-modeline-format    | " [%n:%p] "                             | string  | Format string for each stock in mode-line. %n=name, %p=change percent.                  |
-| achive-tabbar-stocks      | nil                                     | list    | List of stock codes to display in tab-bar.                                              |
-| achive-tabbar-format      | " [%n:%p] "                             | string  | Format string for each stock in tab-bar. %n=name, %p=change percent.                    |
-| achive-tabbar-refresh-seconds | 10                                  | integer | Seconds between tab-bar refresh.                                                        |
+| stock-index-list         | '("sh000001" "sz399001" "sz399006")     | list    | List of composite index.                                                                |
+| stock-code-list         | '("sh600036" "sz000625")                | list    | List of stocks.                                                                         |
+| stock-buffer-name        | "*A Chive*"                               | string  | Buffer name of stock board.                                                            |
+| stock-search-buffer-name | "*A Chive - results -*"                   | string  | Buffer name of stock search board.                                                     |
+| stock-auto-refresh       | t                                       | boolean | Whether to refresh automatically.                                                       |
+| stock-refresh-seconds    | 5                                       | integer | Seconds of automatic refresh time.                                                      |
+| stock-cache-path         | (concat user-emacs-directory ".stock") | string  | Path of cache.                                                                          |
+| stock-colouring          | t                                       | boolean | Whether to apply face. If it's nil will be low-key, you can peek at it at company time. |
+| stock-modeline-stocks    | nil                                     | list    | List of stock codes to display in mode-line.                                            |
+| stock-modeline-refresh-seconds | 10                                 | integer | Seconds between mode-line refresh.                                                      |
+| stock-modeline-format    | " [%n:%p] "                             | string  | Format string for each stock in mode-line. %n=name, %p=change percent.                  |
+| stock-tabbar-stocks      | nil                                     | list    | List of stock codes to display in tab-bar.                                              |
+| stock-tabbar-format      | " [%n:%p] "                             | string  | Format string for each stock in tab-bar. %n=name, %p=change percent.                    |
+| stock-tabbar-refresh-seconds | 10                                  | integer | Seconds between tab-bar refresh.                                                        |
 
 * Command
 | Command                 | Description                                          |
 |-------------------------+------------------------------------------------------|
-| achive                  | Launch achive and switch to visual buffer.           |
-| achive-refresh          | Manual refresh and render.                           |
-| achive-search           | Search stocks by codes.                              |
-| achive-add              | Add favorite stocks by codes                         |
-| achive-remove           | Remove favorite stocks.                              |
-| achive-switch-colouring | Manual switch colouring. It's handy for emergencies. |
-| achive-modeline-mode    | Toggle stock price display in mode-line.             |
-| achive-modeline-add     | Add stocks to mode-line display.                     |
-| achive-modeline-remove  | Remove a stock from mode-line display.               |
-| achive-tabbar-mode      | Toggle stock price display in tab-bar.               |
-| achive-tabbar-add       | Add stocks to tab-bar display.                       |
-| achive-tabbar-remove    | Remove a stock from tab-bar display.                 |
+| stock                  | Launch stock and switch to visual buffer.           |
+| stock-refresh          | Manual refresh and render.                           |
+| stock-search           | Search stocks by codes.                              |
+| stock-add              | Add favorite stocks by codes                         |
+| stock-remove           | Remove favorite stocks.                              |
+| stock-switch-colouring | Manual switch colouring. It's handy for emergencies. |
+| stock-modeline-mode    | Toggle stock price display in mode-line.             |
+| stock-modeline-add     | Add stocks to mode-line display.                     |
+| stock-modeline-remove  | Remove a stock from mode-line display.               |
+| stock-tabbar-mode      | Toggle stock price display in tab-bar.               |
+| stock-tabbar-add       | Add stocks to tab-bar display.                       |
+| stock-tabbar-remove    | Remove a stock from tab-bar display.                 |
 
 * Mode-line Display
 You can display real-time stock price changes directly in the mode-line.
 
 #+BEGIN_SRC lisp
   ;; Configure stocks to show in mode-line
-  (setq achive-modeline-stocks '("sh600036" "sz000625"))
+  (setq stock-modeline-stocks '("sh600036" "sz000625"))
   
   ;; Enable mode-line display
-  (achive-modeline-mode 1)
+  (stock-modeline-mode 1)
 #+END_SRC
 
 * Tab-bar Display
@@ -76,10 +71,10 @@ You can also display real-time stock price changes in the tab-bar.
 
 #+BEGIN_SRC lisp
   ;; Configure stocks to show in tab-bar
-  (setq achive-tabbar-stocks '("sh600036" "sz000625"))
+  (setq stock-tabbar-stocks '("sh600036" "sz000625"))
   
   ;; Enable tab-bar display
-  (achive-tabbar-mode 1)
+  (stock-tabbar-mode 1)
 #+END_SRC
 
 * For traders
