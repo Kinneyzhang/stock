@@ -40,6 +40,9 @@ Download el file to your load-path.
 | achive-modeline-stocks    | nil                                     | list    | List of stock codes to display in mode-line.                                            |
 | achive-modeline-refresh-seconds | 10                                 | integer | Seconds between mode-line refresh.                                                      |
 | achive-modeline-format    | " [%n:%p] "                             | string  | Format string for each stock in mode-line. %n=name, %p=change percent.                  |
+| achive-tabbar-stocks      | nil                                     | list    | List of stock codes to display in tab-bar.                                              |
+| achive-tabbar-format      | " [%n:%p] "                             | string  | Format string for each stock in tab-bar. %n=name, %p=change percent.                    |
+| achive-tabbar-refresh-seconds | 10                                  | integer | Seconds between tab-bar refresh.                                                        |
 
 * Command
 | Command                 | Description                                          |
@@ -53,6 +56,9 @@ Download el file to your load-path.
 | achive-modeline-mode    | Toggle stock price display in mode-line.             |
 | achive-modeline-add     | Add stocks to mode-line display.                     |
 | achive-modeline-remove  | Remove a stock from mode-line display.               |
+| achive-tabbar-mode      | Toggle stock price display in tab-bar.               |
+| achive-tabbar-add       | Add stocks to tab-bar display.                       |
+| achive-tabbar-remove    | Remove a stock from tab-bar display.                 |
 
 * Mode-line Display
 You can display real-time stock price changes directly in the mode-line.
@@ -63,6 +69,17 @@ You can display real-time stock price changes directly in the mode-line.
   
   ;; Enable mode-line display
   (achive-modeline-mode 1)
+#+END_SRC
+
+* Tab-bar Display
+You can also display real-time stock price changes in the tab-bar.
+
+#+BEGIN_SRC lisp
+  ;; Configure stocks to show in tab-bar
+  (setq achive-tabbar-stocks '("sh600036" "sz000625"))
+  
+  ;; Enable tab-bar display
+  (achive-tabbar-mode 1)
 #+END_SRC
 
 * For traders
