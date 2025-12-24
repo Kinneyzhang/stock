@@ -115,6 +115,26 @@ Example: \\='(\"sh600036\" \"sz000625\")."
   :group 'achive
   :type 'string)
 
+
+(defcustom achive-tabbar-stocks nil
+  "List of stock codes to display in tab-bar.
+Example: \\='(\"sh600036\" \"sz000625\")."
+  :group 'achive
+  :type '(repeat string))
+
+
+(defcustom achive-tabbar-format " [%n:%p] "
+  "Format string for each stock in tab-bar.
+%n - stock name, %p - change percent."
+  :group 'achive
+  :type 'string)
+
+
+(defcustom achive-tabbar-refresh-seconds 10
+  "Seconds between tab-bar refresh."
+  :group 'achive
+  :type 'integer)
+
 ;;;;; faces
 
 (defface achive-face-up
@@ -197,6 +217,18 @@ Example: \\='(\"sh600036\" \"sz000625\")."
 
 (defvar achive-modeline-data nil
   "Cached stock data for mode-line display.")
+
+
+(defvar achive-tabbar-string ""
+  "String to display in tab-bar.")
+
+
+(defvar achive-tabbar-timer nil
+  "Timer for tab-bar refresh.")
+
+
+(defvar achive-tabbar-data nil
+  "Cached stock data for tab-bar display.")
 
 ;;;;; functions
 
@@ -596,6 +628,129 @@ With prefix ARG, enable if ARG is positive, disable otherwise."
               (achive-remove-nth-element achive-modeline-stocks index))
         (achive-modeline-fetch)
         (message "<%s> removed from mode-line." code)))))
+
+
+;;;;; tab-bar functions
+
+(defun achive-tabbar-format-stock (entry)
+  "Format a single stock ENTRY for tab-bar display."
+  (let* ((data (cadr entry))
+         (name (aref data 1))
+         (percent (aref data 3))
+         (percent-number (string-to-number percent))
+         (face (cond
+                ((> percent-number 0) 'achive-face-up)
+                ((< percent-number 0) 'achive-face-down)
+                (t 'achive-face-constant)))
+         (formatted (replace-regexp-in-string
+                     "%n" name
+                     (replace-regexp-in-string
+                      "%p" percent
+                      achive-tabbar-format))))
+    (propertize formatted 'face face)))
+
+
+(defun achive-tabbar-update-string (entries)
+  "Update `achive-tabbar-string' with stock ENTRIES data."
+  (setq achive-tabbar-data entries)
+  (setq achive-tabbar-string
+        (if entries
+            (mapconcat #'achive-tabbar-format-stock entries "")
+          ""))
+  (force-mode-line-update t))
+
+
+(defun achive-tabbar-fetch ()
+  "Fetch stock data for tab-bar display."
+  (when achive-tabbar-stocks
+    (achive-request
+     (achive-make-request-url achive-api achive-tabbar-stocks)
+     (lambda ()
+       (let ((entries (seq-filter
+                       #'achive-valid-entry-p
+                       (achive-format-content achive-tabbar-stocks
+                                              (achive-parse-response)))))
+         (achive-tabbar-update-string entries))))))
+
+
+(defun achive-tabbar-loop-refresh (_timer)
+  "Loop to refresh tab-bar stock data."
+  (when achive-tabbar-timer
+    (if (and (achive-weekday-p)
+             (achive-trading-time-p))
+        (achive-tabbar-fetch))
+    (achive-tabbar-handle-refresh)))
+
+
+(defun achive-tabbar-handle-refresh ()
+  "Schedule next tab-bar refresh."
+  (when achive-tabbar-timer
+    (achive-set-timeout #'achive-tabbar-loop-refresh
+                        achive-tabbar-refresh-seconds)))
+
+
+(defun achive-tabbar-stock-item ()
+  "Return tab-bar item displaying stock information."
+  `(achive-tabbar menu-item ,achive-tabbar-string ignore))
+
+
+;;;###autoload
+(defun achive-tabbar-mode (&optional arg)
+  "Toggle stock display in tab-bar.
+With prefix ARG, enable if ARG is positive, disable otherwise."
+  (interactive "P")
+  (let ((enable (if arg
+                    (> (prefix-numeric-value arg) 0)
+                  (not achive-tabbar-timer))))
+    (if enable
+        (progn
+          (unless achive-tabbar-stocks
+            (setq achive-tabbar-stocks achive-stock-list))
+          (unless (memq 'achive-tabbar-stock-item tab-bar-format)
+            (setq tab-bar-format (append tab-bar-format '(achive-tabbar-stock-item))))
+          (tab-bar-mode 1)
+          (setq achive-tabbar-timer t)
+          (achive-tabbar-fetch)
+          (achive-tabbar-handle-refresh)
+          (message "Achive tab-bar enabled."))
+      (setq achive-tabbar-timer nil)
+      (setq achive-tabbar-string "")
+      (setq tab-bar-format (delq 'achive-tabbar-stock-item tab-bar-format))
+      (force-mode-line-update t)
+      (message "Achive tab-bar disabled."))))
+
+
+;;;###autoload
+(defun achive-tabbar-add (codes)
+  "Add stocks to tab-bar display by CODES."
+  (interactive "sPlease input stock codes to add to tab-bar: ")
+  (let ((code-list (split-string codes)))
+    (achive-validate-request
+     code-list
+     (lambda (resp)
+       (let ((valid-codes (mapcar #'car resp)))
+         (when valid-codes
+           (setq achive-tabbar-stocks
+                 (delete-dups (append achive-tabbar-stocks valid-codes)))
+           (achive-tabbar-fetch)
+           (message "[%s] added to tab-bar."
+                    (mapconcat 'identity valid-codes ", "))))))))
+
+
+;;;###autoload
+(defun achive-tabbar-remove ()
+  "Remove a stock from tab-bar display."
+  (interactive)
+  (if (null achive-tabbar-stocks)
+      (message "No stocks in tab-bar.")
+    (let* ((code (completing-read "Select stock to remove from tab-bar: "
+                                  achive-tabbar-stocks nil t))
+           (index (cl-position code achive-tabbar-stocks :test 'string=)))
+      (when index
+        (setq achive-tabbar-stocks
+              (achive-remove-nth-element achive-tabbar-stocks index))
+        (achive-tabbar-fetch)
+        (message "<%s> removed from tab-bar." code)))))
 
 
 (provide 'achive)
