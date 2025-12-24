@@ -103,7 +103,7 @@ Example: \\='(\"sh600036\" \"sz000625\")."
   :type '(repeat string))
 
 
-(defcustom achive-modeline-refresh-seconds 10
+(defcustom achive-modeline-refresh-seconds 1
   "Seconds between mode-line refresh."
   :group 'achive
   :type 'integer)
@@ -416,17 +416,19 @@ CODES: string of stocks list."
 CODES: string of stocks list."
   (interactive "sPlease input code to add: ")
   (setq codes (split-string codes))
-  (achive-validate-request codes (lambda (resp)
-                                   (setq codes (mapcar #'car resp))
-                                   
-                                   (when codes
-                                     (setq achive-stocks (append achive-stocks codes))
-                                     (achive-writecache achive-cache-path achive-stocks)
-                                     (achive-render-request achive-buffer-name
-                                                            (append achive-index-list achive-stocks)
-                                                            (lambda (_resp)
-                                                              (message "[%s] have been added."
-                                                                       (mapconcat 'identity codes ", "))))))))
+  (achive-validate-request
+   codes
+   (lambda (resp)
+     (setq codes (mapcar #'car resp))
+     
+     (when codes
+       (setq achive-stocks (append achive-stocks codes))
+       (achive-writecache achive-cache-path achive-stocks)
+       (achive-render-request achive-buffer-name
+                              (append achive-index-list achive-stocks)
+                              (lambda (_resp)
+                                (message "[%s] have been added."
+                                         (mapconcat 'identity codes ", "))))))))
 
 
 ;;;###autoload
