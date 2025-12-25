@@ -10,14 +10,21 @@ Stock is an Emacs package for displaying A-share (Chinese stock market) real-tim
 - 🔄 *Auto Refresh*: Data updates during trading hours (9:00-11:30, 13:00-15:00)
 - 🔍 *Stock Search*: Search any stock by code
 - ⭐ *Favorites Management*: Add/remove favorite stocks with persistence
+- ⚡ *Incremental Updates*: Uses tp.el for efficient text property updates
 
 * Screenshot
 
 [[./imgs/stock.png]]
 
+* Requirements
+
+- Emacs 28.1+
+- [[https://github.com/Kinneyzhang/tp][tp.el]] - Text Properties manipulation library
+
 * Installation
 
 Download =stock.el= and =stock-utils.el= to your Emacs load-path.
+Make sure [[https://github.com/Kinneyzhang/tp][tp.el]] is installed.
 
 #+begin_src emacs-lisp
 (use-package stock

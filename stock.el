@@ -7,7 +7,7 @@
 ;; Original Author: zakudriver <zy.hua1122@gmail.com>
 ;; Original URL: https://github.com/zakudriver/achive
 ;; Version: 1.0
-;; Package-Requires: ((emacs "25.2"))
+;; Package-Requires: ((emacs "28.1") (tp "0.1.0"))
 ;; Keywords: tools
 
 ;; This file is not part of GNU Emacs.
@@ -49,6 +49,7 @@
 (require 'cl-lib)
 (require 'url)
 (require 'stock-utils)
+(require 'tp)
 
 ;; Declare external variable from url.el to avoid byte-compiler warning.
 ;; This variable holds the HTTP response status code after url-retrieve.
@@ -198,6 +199,16 @@ Each entry is (CODE . PLIST) where PLIST contains stock data.")
 
 (defvar stock--pop-to-buffer-action nil
   "Custom action for `pop-to-buffer' when switching to stock buffer.")
+
+;;;; tp.el Incremental Update Variables
+
+(defvar stock--tp-layers nil
+  "Alist mapping stock codes to their tp layer names.
+Each element is (CODE . LAYER-SYMBOL).")
+
+(defvar stock--tp-cell-data (make-hash-table :test 'equal)
+  "Hash table storing cell data for tp.el incremental updates.
+Keys are \"CODE:FIELD\" strings, values are the display values.")
 
 ;;;; Mode-line Variables
 
@@ -393,11 +404,94 @@ ENTRY is (ID VECTOR PLIST) format."
     (stock-remove-text-properties (aref vec 3))
     entry))
 
+;;;; tp.el Incremental Update Functions
+
+(defun stock--tp-cell-key (code field)
+  "Generate a unique key for CODE and FIELD combination."
+  (format "%s:%s" code field))
+
+(defun stock--tp-cell-var (code field)
+  "Generate a variable symbol for CODE and FIELD combination."
+  (intern (format "stock--cell-%s-%s" code field)))
+
+(defun stock--tp-layer-name (code field)
+  "Generate a layer name for CODE and FIELD combination."
+  (intern (format "stock-layer-%s-%s" code field)))
+
+(defun stock--tp-define-cell-layer (code field)
+  "Define a tp layer for stock CODE and FIELD with reactive variable.
+The layer uses `display' property to show the cell value."
+  (let* ((var-sym (stock--tp-cell-var code field))
+         (layer-name (stock--tp-layer-name code field)))
+    ;; Ensure variable exists
+    (unless (boundp var-sym)
+      (set var-sym ""))
+    ;; Define the layer with reactive display property
+    (tp-define-layer layer-name
+      :props `(display ,(intern (concat "$" (symbol-name var-sym)))))))
+
+(defun stock--tp-update-cell (code field value &optional face)
+  "Update cell VALUE for stock CODE and FIELD.
+Optionally apply FACE to the display.
+Uses tp.el to incrementally update the display property."
+  (let ((var-sym (stock--tp-cell-var code field))
+        (display-value (if face
+                           (propertize value 'face face)
+                         value)))
+    ;; Set the reactive variable, triggering tp.el auto-update
+    (set var-sym display-value)))
+
+(defun stock--tp-update-entry (entry)
+  "Update all cells for a stock ENTRY using tp.el.
+ENTRY is (CODE . PLIST)."
+  (let* ((code (car entry))
+         (plist (cdr entry))
+         (is-index (member code stock-index-list))
+         (percent (plist-get plist :change-percent))
+         (percent-face (stock--get-change-face percent))
+         (index-face 'stock-face-index-name)
+         (fields '(:code :name :price :change-percent :high :low
+                   :volume :turnover :open :yestclose)))
+    (dolist (field fields)
+      (let* ((value (plist-get plist field))
+             (face (cond
+                    ;; Apply index face to code and name
+                    ((and is-index (memq field '(:code :name))) index-face)
+                    ;; Apply change face to percent
+                    ((eq field :change-percent) percent-face)
+                    (t nil))))
+        (when value
+          (stock--tp-update-cell code field value face))))))
+
+(defun stock--tp-init-buffer (buffer-name entries)
+  "Initialize BUFFER-NAME with tp.el layers for ENTRIES.
+Creates placeholder cells and applies tp layers for incremental updates."
+  (with-current-buffer buffer-name
+    (let ((inhibit-read-only t)
+          (fields '(:code :name :price :change-percent :high :low
+                    :volume :turnover :open :yestclose)))
+      ;; Define layers and initialize variables for each cell
+      (dolist (entry entries)
+        (let ((code (car entry)))
+          (dolist (field fields)
+            (stock--tp-define-cell-layer code field)
+            (stock--tp-update-cell code field "-")))))))
+
+(defun stock--tp-render-incremental (entries)
+  "Incrementally update stock data using tp.el.
+ENTRIES is a list of (CODE . PLIST)."
+  (dolist (entry entries)
+    (stock--tp-update-entry entry)))
+
+(defvar stock--first-render t
+  "Flag indicating if this is the first render.")
+
 ;;;; Rendering Functions
 
 (defun stock--render-buffer (buffer-name &optional manual)
   "Render stock data in BUFFER-NAME.
-If MANUAL is t and `stock-colouring' is nil, remove faces."
+If MANUAL is t and `stock-colouring' is nil, remove faces.
+Uses tp.el for incremental updates after first render."
   (let* ((tabulated-entries (mapcar #'stock--entry-to-tabulated
                                     stock--entry-cache))
          (entries (if stock-colouring
@@ -411,7 +505,10 @@ If MANUAL is t and `stock-colouring' is nil, remove faces."
       ;; by tabulated-list-mode, so we extract only ID and VECTOR.
       (setq tabulated-list-entries
             (mapcar (lambda (e) (list (car e) (cadr e))) entries))
-      (tabulated-list-print t t))))
+      ;; Use tabulated-list-print with update-only mode for incremental updates
+      (tabulated-list-print t t)
+      ;; Apply tp.el incremental updates to the rendered cells
+      (stock--tp-render-incremental stock--entry-cache))))
 
 (defun stock--fetch-and-render (buffer-name codes &optional callback)
   "Fetch data for CODES and render in BUFFER-NAME.

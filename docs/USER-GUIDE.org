@@ -20,12 +20,18 @@ Stock.el 是一个基于新浪财经 API 的 Emacs 插件，用于实时显示 A
 
 [[../imgs/stock.png]]
 
+* 系统要求
+
+- Emacs 28.1 或更高版本
+- [[https://github.com/Kinneyzhang/tp][tp.el]] - 文本属性操作库
+
 * 安装
 
 ** 手动安装
 
-1. 下载 =stock.el= 和 =stock-utils.el= 到 Emacs 加载路径中
-2. 在配置文件中添加：
+1. 安装依赖 [[https://github.com/Kinneyzhang/tp][tp.el]]
+2. 下载 =stock.el= 和 =stock-utils.el= 到 Emacs 加载路径中
+3. 在配置文件中添加：
 
 #+begin_src emacs-lisp
 (add-to-list 'load-path "~/.emacs.d/site-lisp/stock")

@@ -13,6 +13,7 @@ Stock.el 是一个 Emacs Lisp 插件，用于在 Emacs 中显示 A 股实时行�
 - 新浪财经 HTTP API
 - tabulated-list-mode（表格显示）
 - url.el（HTTP 请求）
+- tp.el（文本属性增量更新）
 
 ** 文件结构
 
@@ -211,6 +212,45 @@ stock/
 ;; 验证并回调
 (stock--validate-and-callback codes callback)
 #+end_src
+
+*** tp.el 增量更新机制
+
+使用 tp.el 进行增量更新，避免每次刷新都重绘整个表格：
+
+#+begin_src emacs-lisp
+;; 生成单元格唯一键
+(stock--tp-cell-key code field)
+;; => "sh600036:price"
+
+;; 生成单元格变量符号
+(stock--tp-cell-var code field)
+;; => 'stock--cell-sh600036-price
+
+;; 生成 tp layer 名称
+(stock--tp-layer-name code field)
+;; => 'stock-layer-sh600036-price
+
+;; 定义单元格的 tp layer
+(stock--tp-define-cell-layer code field)
+;; 使用 tp-define-layer 创建响应式 layer
+
+;; 更新单元格值（增量更新）
+(stock--tp-update-cell code field value &optional face)
+;; 设置响应式变量，触发 tp.el 自动更新 display 属性
+
+;; 更新整个条目
+(stock--tp-update-entry entry)
+
+;; 增量渲染所有条目
+(stock--tp-render-incremental entries)
+#+end_src
+
+*增量更新原理*：
+
+1. 首次渲染时创建表格结构和 tp layers
+2. 后续刷新时只更新响应式变量的值
+3. tp.el 自动将新值应用到对应的 =display= 文本属性
+4. 避免了 =tabulated-list-print= 的全量重绘开销
 
 *** 定时刷新机制
 
@@ -411,9 +451,13 @@ Returns list of comma-separated values or nil if not found."
 stock.el
 ├── cl-lib (built-in)
 ├── url (built-in)
+├── tp (https://github.com/Kinneyzhang/tp)
 └── stock-utils.el
     └── cl-lib (built-in)
 #+end_src
+
+必需依赖：
+- =tp=：文本属性操作库，用于增量更新
 
 可选依赖：
 - =tablist=：提供更好的表格交互（列过滤、多选等）
@@ -445,3 +489,4 @@ stock.el
 - 添加完整文档
 - 支持 tablist-minor-mode（可选）
 - 添加 variable watcher 支持，修改变量时自动刷新界面
+- 集成 tp.el 实现增量更新，提升刷新性能
