@@ -260,9 +260,9 @@ Returns a comparison function for descending numeric sort."
       (> val-a val-b))))
 
 ;; Backward compatibility aliases for renamed functions.
-;; These are deprecated and may be removed in future versions.
-(defalias 'stock-readcache 'stock-read-cache)
-(defalias 'stock-writecache 'stock-write-cache)
+;; These are deprecated and will be removed in future versions.
+(define-obsolete-function-alias 'stock-readcache 'stock-read-cache "1.0")
+(define-obsolete-function-alias 'stock-writecache 'stock-write-cache "1.0")
 
 (provide 'stock-utils)
 
