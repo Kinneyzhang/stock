@@ -426,7 +426,10 @@ The layer uses `display' property to show the cell value."
     ;; Ensure variable exists
     (unless (boundp var-sym)
       (set var-sym ""))
-    ;; Define the layer with reactive display property
+    ;; Define the layer with reactive display property.
+    ;; tp.el requires reactive variables to be prefixed with '$'.
+    ;; When the variable changes, tp.el automatically updates
+    ;; the display property in all regions where this layer is applied.
     (tp-define-layer layer-name
       :props `(display ,(intern (concat "$" (symbol-name var-sym)))))))
 
@@ -482,9 +485,6 @@ Creates placeholder cells and applies tp layers for incremental updates."
 ENTRIES is a list of (CODE . PLIST)."
   (dolist (entry entries)
     (stock--tp-update-entry entry)))
-
-(defvar stock--first-render t
-  "Flag indicating if this is the first render.")
 
 ;;;; Rendering Functions
 
