@@ -110,8 +110,28 @@ Example: \\='(\"sh600036\" \"sz000625\")."
   :type 'integer)
 
 
-(defcustom stock-modeline-format "[%s:%s] "
+(defcustom stock-modeline-format "[%n:%p]"
   "Format string for each stock in mode-line.
+%n - stock name, %p - change percent."
+  :group 'stock
+  :type 'string)
+
+
+(defcustom stock-headerline-stocks nil
+  "List of stock codes to display in header-line.
+Example: \\='(\"sh600036\" \"sz000625\")."
+  :group 'stock
+  :type '(repeat string))
+
+
+(defcustom stock-headerline-refresh-seconds 1
+  "Seconds between header-line refresh."
+  :group 'stock
+  :type 'integer)
+
+
+(defcustom stock-headerline-format "[%n:%p]"
+  "Format string for each stock in header-line.
 %n - stock name, %p - change percent."
   :group 'stock
   :type 'string)
@@ -198,6 +218,18 @@ Example: \\='(\"sh600036\" \"sz000625\")."
 
 (defvar stock-modeline-data nil
   "Cached stock data for mode-line display.")
+
+
+(defvar stock-headerline-string ""
+  "String to display in header-line.")
+
+
+(defvar stock-headerline-timer nil
+  "Timer for header-line refresh.")
+
+
+(defvar stock-headerline-data nil
+  "Cached stock data for header-line display.")
 
 ;;;;; functions
 
@@ -481,6 +513,14 @@ CODES: string of stocks list."
 
 ;;;;; mode-line functions
 
+(defun stock-format-stock-string (format-str name percent)
+  "Format stock string by replacing %n with NAME and %p with PERCENT in FORMAT-STR."
+  (let ((result format-str))
+    (setq result (replace-regexp-in-string "%n" name result t t))
+    (setq result (replace-regexp-in-string "%p" percent result t t))
+    result))
+
+
 (defun stock-modeline-format-stock (entry)
   "Format a single stock ENTRY for mode-line display."
   (let* ((data (cadr entry))
@@ -491,7 +531,7 @@ CODES: string of stocks list."
                 ((> percent-number 0) 'stock-face-up)
                 ((< percent-number 0) 'stock-face-down)
                 (t 'stock-face-constant))))
-    (propertize (format stock-modeline-format name percent)
+    (propertize (stock-format-stock-string stock-modeline-format name percent)
                 'face face)))
 
 
@@ -500,7 +540,7 @@ CODES: string of stocks list."
   (setq stock-modeline-data entries)
   (setq stock-modeline-string
         (if entries
-            (mapconcat #'stock-modeline-format-stock entries "")
+            (mapconcat #'stock-modeline-format-stock entries " ")
           ""))
   (force-mode-line-update t))
 
@@ -593,6 +633,119 @@ With prefix ARG, enable if ARG is positive, disable otherwise."
               (stock-remove-nth-element stock-modeline-stocks index))
         (stock-modeline-fetch)
         (message "<%s> removed from mode-line." code)))))
+
+
+;;;;; header-line functions
+
+(defun stock-headerline-format-stock (entry)
+  "Format a single stock ENTRY for header-line display."
+  (let* ((data (cadr entry))
+         (name (aref data 1))
+         (percent (aref data 3))
+         (percent-number (string-to-number percent))
+         (face (cond
+                ((> percent-number 0) 'stock-face-up)
+                ((< percent-number 0) 'stock-face-down)
+                (t 'stock-face-constant))))
+    (propertize (stock-format-stock-string stock-headerline-format name percent)
+                'face face)))
+
+
+(defun stock-headerline-update-string (entries)
+  "Update `stock-headerline-string' with stock ENTRIES data."
+  (setq stock-headerline-data entries)
+  (setq stock-headerline-string
+        (if entries
+            (mapconcat #'stock-headerline-format-stock entries " ")
+          ""))
+  (force-mode-line-update t))
+
+
+(defun stock-headerline-fetch ()
+  "Fetch stock data for header-line display."
+  (when stock-headerline-stocks
+    (stock-request
+     (stock-make-request-url stock-api stock-headerline-stocks)
+     (lambda ()
+       (let ((entries (seq-filter
+                       #'stock-valid-entry-p
+                       (stock-format-content stock-headerline-stocks
+                                             (stock-parse-response)))))
+         (stock-headerline-update-string entries))))))
+
+
+(defun stock-headerline-loop-refresh (_timer)
+  "Loop to refresh header-line stock data."
+  (when stock-headerline-timer
+    (if (and (stock-weekday-p)
+             (stock-trading-time-p))
+        (stock-headerline-fetch))
+    (stock-headerline-handle-refresh)))
+
+
+(defun stock-headerline-handle-refresh ()
+  "Schedule next header-line refresh."
+  (when stock-headerline-timer
+    (stock-set-timeout #'stock-headerline-loop-refresh
+                        stock-headerline-refresh-seconds)))
+
+
+;;;###autoload
+(defun stock-headerline-mode (&optional arg)
+  "Toggle stock display in header-line.
+With prefix ARG, enable if ARG is positive, disable otherwise."
+  (interactive "P")
+  (let ((enable (if arg
+                    (> (prefix-numeric-value arg) 0)
+                  (not stock-headerline-timer))))
+    (if enable
+        (progn
+          (unless stock-headerline-stocks
+            (setq stock-headerline-stocks stock-code-list))
+          (setq-default header-line-format
+                        '(:eval stock-headerline-string))
+          (setq stock-headerline-timer t)
+          (stock-headerline-fetch)
+          (stock-headerline-handle-refresh)
+          (message "Stock header-line enabled."))
+      (setq stock-headerline-timer nil)
+      (setq stock-headerline-string "")
+      (setq-default header-line-format nil)
+      (force-mode-line-update t)
+      (message "Stock header-line disabled."))))
+
+
+;;;###autoload
+(defun stock-headerline-add (codes)
+  "Add stocks to header-line display by CODES."
+  (interactive "sPlease input stock codes to add to header-line: ")
+  (let ((code-list (split-string codes)))
+    (stock-validate-request
+     code-list
+     (lambda (resp)
+       (let ((valid-codes (mapcar #'car resp)))
+         (when valid-codes
+           (setq stock-headerline-stocks
+                 (delete-dups (append stock-headerline-stocks valid-codes)))
+           (stock-headerline-fetch)
+           (message "[%s] added to header-line."
+                    (mapconcat 'identity valid-codes ", "))))))))
+
+
+;;;###autoload
+(defun stock-headerline-remove ()
+  "Remove a stock from header-line display."
+  (interactive)
+  (if (null stock-headerline-stocks)
+      (message "No stocks in header-line.")
+    (let* ((code (completing-read "Select stock to remove from header-line: "
+                                  stock-headerline-stocks nil t))
+           (index (cl-position code stock-headerline-stocks :test 'string=)))
+      (when index
+        (setq stock-headerline-stocks
+              (stock-remove-nth-element stock-headerline-stocks index))
+        (stock-headerline-fetch)
+        (message "<%s> removed from header-line." code)))))
 
 (provide 'stock)
 

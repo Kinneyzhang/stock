@@ -22,32 +22,38 @@ Download el file to your load-path.
 #+END_SRC
 
 * Customization
-| Variable                       | Default                                | type    | Description                                                                             |
-|--------------------------------+----------------------------------------+---------+-----------------------------------------------------------------------------------------|
-| stock-index-list               | '("sh000001" "sz399001" "sz399006")    | list    | List of composite index.                                                                |
-| stock-code-list                | '("sh600036" "sz000625")               | list    | List of stocks.                                                                         |
-| stock-buffer-name              | "*A Chive*"                            | string  | Buffer name of stock board.                                                             |
-| stock-search-buffer-name       | "*A Chive - results -*"                | string  | Buffer name of stock search board.                                                      |
-| stock-auto-refresh             | t                                      | boolean | Whether to refresh automatically.                                                       |
-| stock-refresh-seconds          | 5                                      | integer | Seconds of automatic refresh time.                                                      |
-| stock-cache-path               | (concat user-emacs-directory ".stock") | string  | Path of cache.                                                                          |
-| stock-colouring                | t                                      | boolean | Whether to apply face. If it's nil will be low-key, you can peek at it at company time. |
-| stock-modeline-stocks          | nil                                    | list    | List of stock codes to display in mode-line.                                            |
-| stock-modeline-refresh-seconds | 10                                     | integer | Seconds between mode-line refresh.                                                      |
-| stock-modeline-format          | " [%n:%p] "                            | string  | Format string for each stock in mode-line. %n=name, %p=change percent.                  |
+| Variable                        | Default                                | type    | Description                                                                             |
+|---------------------------------+----------------------------------------+---------+-----------------------------------------------------------------------------------------|
+| stock-index-list                | '("sh000001" "sz399001" "sz399006")    | list    | List of composite index.                                                                |
+| stock-code-list                 | '("sh600036" "sz000625")               | list    | List of stocks.                                                                         |
+| stock-buffer-name               | "*A Chive*"                            | string  | Buffer name of stock board.                                                             |
+| stock-search-buffer-name        | "*A Chive - results -*"                | string  | Buffer name of stock search board.                                                      |
+| stock-auto-refresh              | t                                      | boolean | Whether to refresh automatically.                                                       |
+| stock-refresh-seconds           | 5                                      | integer | Seconds of automatic refresh time.                                                      |
+| stock-cache-path                | (concat user-emacs-directory ".stock") | string  | Path of cache.                                                                          |
+| stock-colouring                 | t                                      | boolean | Whether to apply face. If it's nil will be low-key, you can peek at it at company time. |
+| stock-modeline-stocks           | nil                                    | list    | List of stock codes to display in mode-line.                                            |
+| stock-modeline-refresh-seconds  | 1                                      | integer | Seconds between mode-line refresh.                                                      |
+| stock-modeline-format           | "[%n:%p]"                              | string  | Format string for each stock in mode-line. %n=name, %p=change percent.                  |
+| stock-headerline-stocks         | nil                                    | list    | List of stock codes to display in header-line.                                          |
+| stock-headerline-refresh-seconds| 1                                      | integer | Seconds between header-line refresh.                                                    |
+| stock-headerline-format         | "[%n:%p]"                              | string  | Format string for each stock in header-line. %n=name, %p=change percent.                |
 
 * Command
-| Command                 | Description                                          |
-|-------------------------+------------------------------------------------------|
-| stock                  | Launch stock and switch to visual buffer.           |
-| stock-refresh          | Manual refresh and render.                           |
-| stock-search           | Search stocks by codes.                              |
-| stock-add              | Add favorite stocks by codes                         |
-| stock-remove           | Remove favorite stocks.                              |
-| stock-switch-colouring | Manual switch colouring. It's handy for emergencies. |
-| stock-modeline-mode    | Toggle stock price display in mode-line.             |
-| stock-modeline-add     | Add stocks to mode-line display.                     |
-| stock-modeline-remove  | Remove a stock from mode-line display.               |
+| Command                  | Description                                          |
+|--------------------------+------------------------------------------------------|
+| stock                    | Launch stock and switch to visual buffer.            |
+| stock-refresh            | Manual refresh and render.                           |
+| stock-search             | Search stocks by codes.                              |
+| stock-add                | Add favorite stocks by codes                         |
+| stock-remove             | Remove favorite stocks.                              |
+| stock-switch-colouring   | Manual switch colouring. It's handy for emergencies. |
+| stock-modeline-mode      | Toggle stock price display in mode-line.             |
+| stock-modeline-add       | Add stocks to mode-line display.                     |
+| stock-modeline-remove    | Remove a stock from mode-line display.               |
+| stock-headerline-mode    | Toggle stock price display in header-line.           |
+| stock-headerline-add     | Add stocks to header-line display.                   |
+| stock-headerline-remove  | Remove a stock from header-line display.             |
 
 * Mode-line Display
 You can display real-time stock price changes directly in the mode-line.
@@ -58,6 +64,17 @@ You can display real-time stock price changes directly in the mode-line.
   
   ;; Enable mode-line display
   (stock-modeline-mode 1)
+#+END_SRC
+
+* Header-line Display
+You can display real-time stock price changes directly in the header-line.
+
+#+BEGIN_SRC lisp
+  ;; Configure stocks to show in header-line
+  (setq stock-headerline-stocks '("sh600036" "sz000625"))
+  
+  ;; Enable header-line display
+  (stock-headerline-mode 1)
 #+END_SRC
 
 * For traders
