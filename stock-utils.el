@@ -248,16 +248,22 @@ Returns the plain string without any faces."
 
 ;;;; Sorting Utilities
 
+(defconst stock--key-to-column-index
+  '((:code . 0) (:name . 1) (:price . 2) (:change-percent . 3)
+    (:high . 4) (:low . 5) (:volume . 6) (:turnover . 7)
+    (:open . 8) (:yestclose . 9))
+  "Mapping from plist keys to column indices in the display vector.")
+
 (defun stock-make-numeric-sorter (key)
   "Create a sort function for tabulated-list by KEY.
 KEY is a plist key like :price, :change-percent.
-Returns a comparison function for descending numeric sort."
-  (lambda (a b)
-    (let ((val-a (string-to-number
-                  (plist-get (cadr a) key)))
-          (val-b (string-to-number
-                  (plist-get (cadr b) key))))
-      (> val-a val-b))))
+Returns a comparison function for descending numeric sort.
+Note: This function works with tabulated-list entries of format (ID VECTOR)."
+  (let ((idx (alist-get key stock--key-to-column-index)))
+    (lambda (a b)
+      (let ((val-a (string-to-number (or (aref (cadr a) idx) "0")))
+            (val-b (string-to-number (or (aref (cadr b) idx) "0"))))
+        (> val-a val-b)))))
 
 ;; Backward compatibility aliases for renamed functions.
 ;; These are deprecated and will be removed in future versions.

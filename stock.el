@@ -236,10 +236,11 @@ Keys are \"CODE:FIELD\" strings, values are the display values.")
 
 (defun stock--make-plist-sorter (key)
   "Create a sort function for tabulated-list by plist KEY."
-  (lambda (a b)
-    (let ((val-a (string-to-number (plist-get (cadr a) key)))
-          (val-b (string-to-number (plist-get (cadr b) key))))
-      (> val-a val-b))))
+  (let ((idx (alist-get key stock--key-to-column-index)))
+    (lambda (a b)
+      (let ((val-a (string-to-number (or (aref (cadr a) idx) "0")))
+            (val-b (string-to-number (or (aref (cadr b) idx) "0"))))
+        (> val-a val-b)))))
 
 (defconst stock--visual-columns
   (vector
