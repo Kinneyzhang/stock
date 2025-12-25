@@ -511,7 +511,7 @@ CODES: string of stocks list."
   (tablist-minor-mode))
 
 
-;;;;; mode-line functions
+;;;;; mode-line and header-line common functions
 
 (defun stock-format-stock-string (format-str name percent)
   "Format stock string by replacing %n with NAME and %p with PERCENT in FORMAT-STR."
@@ -521,8 +521,8 @@ CODES: string of stocks list."
     result))
 
 
-(defun stock-modeline-format-stock (entry)
-  "Format a single stock ENTRY for mode-line display."
+(defun stock--format-stock-entry (entry format-str)
+  "Format a single stock ENTRY using FORMAT-STR for display."
   (let* ((data (cadr entry))
          (name (aref data 1))
          (percent (aref data 3))
@@ -531,8 +531,15 @@ CODES: string of stocks list."
                 ((> percent-number 0) 'stock-face-up)
                 ((< percent-number 0) 'stock-face-down)
                 (t 'stock-face-constant))))
-    (propertize (stock-format-stock-string stock-modeline-format name percent)
+    (propertize (stock-format-stock-string format-str name percent)
                 'face face)))
+
+
+;;;;; mode-line functions
+
+(defun stock-modeline-format-stock (entry)
+  "Format a single stock ENTRY for mode-line display."
+  (stock--format-stock-entry entry stock-modeline-format))
 
 
 (defun stock-modeline-update-string (entries)
@@ -639,16 +646,7 @@ With prefix ARG, enable if ARG is positive, disable otherwise."
 
 (defun stock-headerline-format-stock (entry)
   "Format a single stock ENTRY for header-line display."
-  (let* ((data (cadr entry))
-         (name (aref data 1))
-         (percent (aref data 3))
-         (percent-number (string-to-number percent))
-         (face (cond
-                ((> percent-number 0) 'stock-face-up)
-                ((< percent-number 0) 'stock-face-down)
-                (t 'stock-face-constant))))
-    (propertize (stock-format-stock-string stock-headerline-format name percent)
-                'face face)))
+  (stock--format-stock-entry entry stock-headerline-format))
 
 
 (defun stock-headerline-update-string (entries)
