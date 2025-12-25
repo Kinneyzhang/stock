@@ -38,6 +38,9 @@ Download el file to your load-path.
 | stock-tabbar-stocks      | nil                                     | list    | List of stock codes to display in tab-bar.                                              |
 | stock-tabbar-format      | " [%n:%p] "                             | string  | Format string for each stock in tab-bar. %n=name, %p=change percent.                    |
 | stock-tabbar-refresh-seconds | 10                                  | integer | Seconds between tab-bar refresh.                                                        |
+| stock-tabline-stocks     | nil                                     | list    | List of stock codes to display in tab-line.                                             |
+| stock-tabline-format     | " [%n:%p] "                             | string  | Format string for each stock in tab-line. %n=name, %p=change percent.                   |
+| stock-tabline-refresh-seconds | 10                                 | integer | Seconds between tab-line refresh.                                                       |
 
 * Command
 | Command                 | Description                                          |
@@ -54,6 +57,9 @@ Download el file to your load-path.
 | stock-tabbar-mode      | Toggle stock price display in tab-bar.               |
 | stock-tabbar-add       | Add stocks to tab-bar display.                       |
 | stock-tabbar-remove    | Remove a stock from tab-bar display.                 |
+| stock-tabline-mode     | Toggle stock price display in tab-line.              |
+| stock-tabline-add      | Add stocks to tab-line display.                      |
+| stock-tabline-remove   | Remove a stock from tab-line display.                |
 
 * Mode-line Display
 You can display real-time stock price changes directly in the mode-line.
@@ -75,6 +81,17 @@ You can also display real-time stock price changes in the tab-bar.
   
   ;; Enable tab-bar display
   (stock-tabbar-mode 1)
+#+END_SRC
+
+* Tab-line Display
+You can display real-time stock price changes in the tab-line.
+
+#+BEGIN_SRC lisp
+  ;; Configure stocks to show in tab-line
+  (setq stock-tabline-stocks '("sh600036" "sz000625"))
+  
+  ;; Enable tab-line display
+  (stock-tabline-mode 1)
 #+END_SRC
 
 * For traders

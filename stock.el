@@ -137,6 +137,26 @@ Example: \\='(\"sh600036\" \"sz000625\")."
   :group 'stock
   :type 'integer)
 
+
+(defcustom stock-tabline-stocks nil
+  "List of stock codes to display in tab-line.
+Example: \\='(\"sh600036\" \"sz000625\")."
+  :group 'stock
+  :type '(repeat string))
+
+
+(defcustom stock-tabline-format " [%n:%p] "
+  "Format string for each stock in tab-line.
+%n - stock name, %p - change percent."
+  :group 'stock
+  :type 'string)
+
+
+(defcustom stock-tabline-refresh-seconds 10
+  "Seconds between tab-line refresh."
+  :group 'stock
+  :type 'integer)
+
 ;;;;; faces
 
 (defface stock-face-up
@@ -231,6 +251,18 @@ Example: \\='(\"sh600036\" \"sz000625\")."
 
 (defvar stock-tabbar-data nil
   "Cached stock data for tab-bar display.")
+
+
+(defvar stock-tabline-string ""
+  "String to display in tab-line.")
+
+
+(defvar stock-tabline-timer nil
+  "Timer for tab-line refresh.")
+
+
+(defvar stock-tabline-data nil
+  "Cached stock data for tab-line display.")
 
 ;;;;; functions
 
@@ -753,6 +785,142 @@ With prefix ARG, enable if ARG is positive, disable otherwise."
               (stock-remove-nth-element stock-tabbar-stocks index))
         (stock-tabbar-fetch)
         (message "<%s> removed from tab-bar." code)))))
+
+
+;;;;; tab-line functions
+
+(defun stock-tabline-format-stock (entry)
+  "Format a single stock ENTRY for tab-line display."
+  (let* ((data (cadr entry))
+         (name (aref data 1))
+         (percent (aref data 3))
+         (percent-number (string-to-number percent))
+         (face (cond
+                ((> percent-number 0) 'stock-face-up)
+                ((< percent-number 0) 'stock-face-down)
+                (t 'stock-face-constant)))
+         (formatted (replace-regexp-in-string
+                     "%n" name
+                     (replace-regexp-in-string
+                      "%p" percent
+                      stock-tabline-format))))
+    (propertize formatted 'face face)))
+
+
+(defun stock-tabline-update-string (entries)
+  "Update `stock-tabline-string' with stock ENTRIES data."
+  (setq stock-tabline-data entries)
+  (setq stock-tabline-string
+        (if entries
+            (mapconcat #'stock-tabline-format-stock entries "")
+          ""))
+  (force-mode-line-update t))
+
+
+(defun stock-tabline-fetch ()
+  "Fetch stock data for tab-line display."
+  (when stock-tabline-stocks
+    (stock-request
+     (stock-make-request-url stock-api stock-tabline-stocks)
+     (lambda ()
+       (let ((entries (seq-filter
+                       #'stock-valid-entry-p
+                       (stock-format-content stock-tabline-stocks
+                                              (stock-parse-response)))))
+         (stock-tabline-update-string entries))))))
+
+
+(defun stock-tabline-loop-refresh (_timer)
+  "Loop to refresh tab-line stock data."
+  (when stock-tabline-timer
+    (if (and (stock-weekday-p)
+             (stock-trading-time-p))
+        (stock-tabline-fetch))
+    (stock-tabline-handle-refresh)))
+
+
+(defun stock-tabline-handle-refresh ()
+  "Schedule next tab-line refresh."
+  (when stock-tabline-timer
+    (stock-set-timeout #'stock-tabline-loop-refresh
+                        stock-tabline-refresh-seconds)))
+
+
+(defun stock-tabline-stock-item ()
+  "Return tab-line item displaying stock information."
+  stock-tabline-string)
+
+
+(defvar stock-tabline-original-format nil
+  "Original tab-line format before enabling stock display.")
+
+
+;;;###autoload
+(defun stock-tabline-mode (&optional arg)
+  "Toggle stock display in tab-line.
+With prefix ARG, enable if ARG is positive, disable otherwise."
+  (interactive "P")
+  (let ((enable (if arg
+                    (> (prefix-numeric-value arg) 0)
+                  (not stock-tabline-timer))))
+    (if enable
+        (progn
+          (unless stock-tabline-stocks
+            (setq stock-tabline-stocks stock-code-list))
+          ;; Save original tab-line-format if not already saved
+          (unless stock-tabline-original-format
+            (setq stock-tabline-original-format
+                  (default-value 'tab-line-format)))
+          ;; Set tab-line-format to include stock info
+          (setq-default tab-line-format
+                        `(:eval (concat (stock-tabline-stock-item)
+                                        (when ,stock-tabline-original-format
+                                          (format-mode-line ,stock-tabline-original-format)))))
+          (global-tab-line-mode 1)
+          (setq stock-tabline-timer t)
+          (stock-tabline-fetch)
+          (stock-tabline-handle-refresh)
+          (message "Stock tab-line enabled."))
+      (setq stock-tabline-timer nil)
+      (setq stock-tabline-string "")
+      ;; Restore original tab-line-format
+      (setq-default tab-line-format stock-tabline-original-format)
+      (setq stock-tabline-original-format nil)
+      (force-mode-line-update t)
+      (message "Stock tab-line disabled."))))
+
+
+;;;###autoload
+(defun stock-tabline-add (codes)
+  "Add stocks to tab-line display by CODES."
+  (interactive "sPlease input stock codes to add to tab-line: ")
+  (let ((code-list (split-string codes)))
+    (stock-validate-request
+     code-list
+     (lambda (resp)
+       (let ((valid-codes (mapcar #'car resp)))
+         (when valid-codes
+           (setq stock-tabline-stocks
+                 (delete-dups (append stock-tabline-stocks valid-codes)))
+           (stock-tabline-fetch)
+           (message "[%s] added to tab-line."
+                    (mapconcat 'identity valid-codes ", "))))))))
+
+
+;;;###autoload
+(defun stock-tabline-remove ()
+  "Remove a stock from tab-line display."
+  (interactive)
+  (if (null stock-tabline-stocks)
+      (message "No stocks in tab-line.")
+    (let* ((code (completing-read "Select stock to remove from tab-line: "
+                                  stock-tabline-stocks nil t))
+           (index (cl-position code stock-tabline-stocks :test 'string=)))
+      (when index
+        (setq stock-tabline-stocks
+              (stock-remove-nth-element stock-tabline-stocks index))
+        (stock-tabline-fetch)
+        (message "<%s> removed from tab-line." code)))))
 
 
 (provide 'stock)
