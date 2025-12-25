@@ -260,6 +260,7 @@ KEY is a plist key like :price, :change-percent.
 Returns a comparison function for descending numeric sort.
 Note: This function works with tabulated-list entries of format (ID VECTOR)."
   (let ((idx (alist-get key stock--key-to-column-index)))
+    (unless idx (error "Invalid key: %s" key))
     (lambda (a b)
       (let ((val-a (string-to-number (or (aref (cadr a) idx) "0")))
             (val-b (string-to-number (or (aref (cadr b) idx) "0"))))
