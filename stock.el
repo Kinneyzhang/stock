@@ -872,10 +872,11 @@ With prefix ARG, enable if ARG is positive, disable otherwise."
             (setq stock-tabline-original-format
                   (default-value 'tab-line-format)))
           ;; Set tab-line-format to include stock info
-          (setq-default tab-line-format
-                        `(:eval (concat (stock-tabline-stock-item)
-                                        (when ,stock-tabline-original-format
-                                          (format-mode-line ,stock-tabline-original-format)))))
+          (setq-default
+           tab-line-format
+           `(:eval (concat (stock-tabline-stock-item)
+                           (when ,stock-tabline-original-format
+                             (format-mode-line ,stock-tabline-original-format)))))
           (global-tab-line-mode 1)
           (setq stock-tabline-timer t)
           (stock-tabline-fetch)
