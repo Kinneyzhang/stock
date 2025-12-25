@@ -1,85 +1,125 @@
-#+TITLE: Stock in emacs
+#+TITLE: Stock.el - A-Share Real-time Stock Dashboard
 
-Stock is a plug-in based on api of Sina that creates a dashboard displaying real-time data of a-share indexs and stocks.
-Thanks for the super-fast Sina api, stock performs so well to update data automatically.
+Stock is an Emacs package for displaying A-share (Chinese stock market) real-time data based on Sina Finance API.
 
-* Screencast
+* Features
+
+- 📊 *Dashboard Buffer*: Display stock indices and favorite stocks with auto-refresh
+- 📈 *Mode-line Display*: Quick glance at stock prices while working
+- 📉 *Header-line Display*: Alternative display in buffer header
+- 🔄 *Auto Refresh*: Data updates during trading hours (9:00-11:30, 13:00-15:00)
+- 🔍 *Stock Search*: Search any stock by code
+- ⭐ *Favorites Management*: Add/remove favorite stocks with persistence
+- ⚡ *Incremental Updates*: Uses tp.el for efficient text property updates
+
+* Screenshot
+
 [[./imgs/stock.png]]
 
+* Requirements
+
+- Emacs 28.1+
+- [[https://github.com/Kinneyzhang/tp][tp.el]] - Text Properties manipulation library
+
 * Installation
-Download el file to your load-path.
 
-* Usage
-#+BEGIN_SRC lisp
-  (use-package stock
-    :load-path "~/.emacs.d/site-lisp/stock"
-    :bind
-    ("C-c a a" . stock)
-    :custom
-    (stock-auto-refresh t)
-    (stock-refresh-seconds 5)
-    (stock-code-list '("sh600036" "sh601012" "sz000625" "sz002050" "sz002013" "sh600176")))
-#+END_SRC
+Download =stock.el= and =stock-utils.el= to your Emacs load-path.
+Make sure [[https://github.com/Kinneyzhang/tp][tp.el]] is installed.
 
-* Customization
-| Variable                        | Default                                | type    | Description                                                                             |
-|---------------------------------+----------------------------------------+---------+-----------------------------------------------------------------------------------------|
-| stock-index-list                | '("sh000001" "sz399001" "sz399006")    | list    | List of composite index.                                                                |
-| stock-code-list                 | '("sh600036" "sz000625")               | list    | List of stocks.                                                                         |
-| stock-buffer-name               | "*A Chive*"                            | string  | Buffer name of stock board.                                                             |
-| stock-search-buffer-name        | "*A Chive - results -*"                | string  | Buffer name of stock search board.                                                      |
-| stock-auto-refresh              | t                                      | boolean | Whether to refresh automatically.                                                       |
-| stock-refresh-seconds           | 5                                      | integer | Seconds of automatic refresh time.                                                      |
-| stock-cache-path                | (concat user-emacs-directory ".stock") | string  | Path of cache.                                                                          |
-| stock-colouring                 | t                                      | boolean | Whether to apply face. If it's nil will be low-key, you can peek at it at company time. |
-| stock-modeline-stocks           | nil                                    | list    | List of stock codes to display in mode-line.                                            |
-| stock-modeline-refresh-seconds  | 1                                      | integer | Seconds between mode-line refresh.                                                      |
-| stock-modeline-format           | "[%n:%p]"                              | string  | Format string for each stock in mode-line. %n=name, %p=change percent.                  |
-| stock-headerline-stocks         | nil                                    | list    | List of stock codes to display in header-line.                                          |
-| stock-headerline-refresh-seconds| 1                                      | integer | Seconds between header-line refresh.                                                    |
-| stock-headerline-format         | "[%n:%p]"                              | string  | Format string for each stock in header-line. %n=name, %p=change percent.                |
+#+begin_src emacs-lisp
+(use-package stock
+  :load-path "~/.emacs.d/site-lisp/stock"
+  :bind
+  ("C-c s s" . stock)
+  ("C-c s m" . stock-modeline-mode)
+  :custom
+  (stock-auto-refresh t)
+  (stock-refresh-seconds 5)
+  (stock-code-list '("sh600036" "sz000625")))
+#+end_src
 
-* Command
-| Command                  | Description                                          |
-|--------------------------+------------------------------------------------------|
-| stock                    | Launch stock and switch to visual buffer.            |
-| stock-refresh            | Manual refresh and render.                           |
-| stock-search             | Search stocks by codes.                              |
-| stock-add                | Add favorite stocks by codes                         |
-| stock-remove             | Remove favorite stocks.                              |
-| stock-switch-colouring   | Manual switch colouring. It's handy for emergencies. |
-| stock-modeline-mode      | Toggle stock price display in mode-line.             |
-| stock-modeline-add       | Add stocks to mode-line display.                     |
-| stock-modeline-remove    | Remove a stock from mode-line display.               |
-| stock-headerline-mode    | Toggle stock price display in header-line.           |
-| stock-headerline-add     | Add stocks to header-line display.                   |
-| stock-headerline-remove  | Remove a stock from header-line display.             |
+* Quick Start
+
+#+begin_src text
+M-x stock          ; Open dashboard
+#+end_src
+
+In the dashboard:
+- =+= : Add favorite stocks
+- =_= : Remove a stock
+- =g= : Refresh data
+- =s= : Search stocks
+- =c= : Toggle color (stealth mode)
+
+* Documentation
+
+- [[./docs/USER-GUIDE.org][用户使用指南 (User Guide)]] - Comprehensive user documentation in Chinese
+- [[./docs/DESIGN.org][设计文档 (Design Doc)]] - Developer documentation for extending the package
+
+* Configuration
+
+| Variable                          | Default                             | Description                                           |
+|-----------------------------------+-------------------------------------+-------------------------------------------------------|
+| =stock-index-list=                | '("sh000001" "sz399001" "sz399006") | Stock indices to display                              |
+| =stock-code-list=                 | '("sh600036" "sz000625")            | Default favorite stocks                               |
+| =stock-buffer-name=               | "*A Chive*"                         | Dashboard buffer name                                 |
+| =stock-auto-refresh=              | t                                   | Enable auto-refresh                                   |
+| =stock-refresh-seconds=           | 5                                   | Refresh interval (seconds)                            |
+| =stock-colouring=                 | t                                   | Enable colored display                                |
+| =stock-modeline-stocks=           | nil                                 | Stocks for mode-line display                          |
+| =stock-modeline-format=           | "[%n:%p]"                           | Mode-line format (%n=name, %p=percent)                |
+| =stock-modeline-refresh-seconds=  | 1                                   | Mode-line refresh interval                            |
+| =stock-headerline-stocks=         | nil                                 | Stocks for header-line display                        |
+| =stock-headerline-format=         | "[%n:%p]"                           | Header-line format                                    |
+| =stock-headerline-refresh-seconds= | 1                                   | Header-line refresh interval                          |
+
+* Commands
+
+| Command                   | Description                                         |
+|---------------------------+-----------------------------------------------------|
+| =stock=                   | Open the main stock dashboard                       |
+| =stock-refresh=           | Manually refresh stock data                         |
+| =stock-search=            | Search stocks by codes                              |
+| =stock-add=               | Add stocks to favorites                             |
+| =stock-remove=            | Remove a stock from favorites                       |
+| =stock-switch-colouring=  | Toggle color display (stealth mode)                 |
+| =stock-modeline-mode=     | Toggle mode-line stock display                      |
+| =stock-modeline-add=      | Add stocks to mode-line                             |
+| =stock-modeline-remove=   | Remove a stock from mode-line                       |
+| =stock-headerline-mode=   | Toggle header-line stock display                    |
+| =stock-headerline-add=    | Add stocks to header-line                           |
+| =stock-headerline-remove= | Remove a stock from header-line                     |
 
 * Mode-line Display
-You can display real-time stock price changes directly in the mode-line.
 
-#+BEGIN_SRC lisp
-  ;; Configure stocks to show in mode-line
-  (setq stock-modeline-stocks '("sh600036" "sz000625"))
-  
-  ;; Enable mode-line display
-  (stock-modeline-mode 1)
-#+END_SRC
+Display real-time stock prices in your mode-line:
+
+#+begin_src emacs-lisp
+;; Configure stocks
+(setq stock-modeline-stocks '("sh600036" "sz000625"))
+
+;; Enable mode-line display
+(stock-modeline-mode 1)
+#+end_src
 
 * Header-line Display
-You can display real-time stock price changes directly in the header-line.
 
-#+BEGIN_SRC lisp
-  ;; Configure stocks to show in header-line
-  (setq stock-headerline-stocks '("sh600036" "sz000625"))
-  
-  ;; Enable header-line display
-  (stock-headerline-mode 1)
-#+END_SRC
+Display stocks in the header-line:
 
-* For traders
-#+BEGIN_QUOTE
-bought and forget.
-#+END_QUOTE
+#+begin_src emacs-lisp
+;; Configure stocks
+(setq stock-headerline-stocks '("sh600036" "sz000625"))
 
-** [[http://www.gnu.org/licenses/][License]]
+;; Enable header-line display
+(stock-headerline-mode 1)
+#+end_src
+
+* For Traders
+
+#+begin_quote
+Buy and forget. 买了就忘。
+#+end_quote
+
+* License
+
+[[http://www.gnu.org/licenses/][GNU General Public License v3.0]]
