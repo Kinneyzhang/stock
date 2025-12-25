@@ -1,8 +1,8 @@
-;;; stock-utils.el --- Extend for stock  -*- lexical-binding: t; -*-
+;;; stock-utils.el --- Utility functions for stock.el  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2017 Kinneyzhang
+;; Copyright (C) 2025 Kinneyzhang
 
-;; Author：Kinney Zhang <kinneyzhang666@gmail.com>
+;; Author: Kinney Zhang <kinneyzhang666@gmail.com>
 ;; URL: https://github.com/Kinneyzhang/stock
 ;; Original Author: zakudriver <zy.hua1122@gmail.com>
 ;; Original URL: https://github.com/zakudriver/achive
@@ -27,184 +27,241 @@
 
 ;;; Commentary:
 
-;; Some util function for stock.
-
-;;; Install these required packages:
-
-;; + cl-lib
+;; This file provides utility functions for stock.el, including:
+;; - Plist-based stock data structure accessors and constructors
+;; - Time and date utilities for trading hours detection
+;; - Cache file read/write operations
+;; - Data formatting and conversion utilities
 
 ;;; Code:
 
 (require 'cl-lib)
 
+;;;; Plist Data Structure
+
+;; Stock data is represented as a plist with the following keys:
+;; :code         - Stock code (e.g., "sh600036")
+;; :name         - Stock name (e.g., "招商银行")
+;; :price        - Current price
+;; :change-percent - Change percentage (e.g., "+1.23%")
+;; :high         - Today's highest price
+;; :low          - Today's lowest price
+;; :volume       - Trading volume (in lots, 1 lot = 100 shares)
+;; :turnover     - Turnover amount (in 10000 yuan, unit: W)
+;; :open         - Opening price
+;; :yestclose    - Yesterday's closing price
+
+(defun stock-plist-get (stock key)
+  "Get value of KEY from STOCK plist.
+STOCK is a plist containing stock data.
+KEY is the property name (e.g., :code, :name, :price)."
+  (plist-get stock key))
+
+(defun stock-plist-put (stock key value)
+  "Set VALUE for KEY in STOCK plist.
+Returns a new plist with the updated value.
+STOCK is a plist containing stock data.
+KEY is the property name.
+VALUE is the new value to set."
+  (plist-put (copy-sequence stock) key value))
+
+(defun stock-make-plist (code name price change-percent high low volume turnover open yestclose)
+  "Create a stock plist from individual field values.
+CODE is the stock code.
+NAME is the stock name.
+PRICE is the current price.
+CHANGE-PERCENT is the change percentage string.
+HIGH is today's highest price.
+LOW is today's lowest price.
+VOLUME is the trading volume.
+TURNOVER is the turnover amount.
+OPEN is the opening price.
+YESTCLOSE is yesterday's closing price."
+  (list :code code
+        :name name
+        :price price
+        :change-percent change-percent
+        :high high
+        :low low
+        :volume volume
+        :turnover turnover
+        :open open
+        :yestclose yestclose))
+
+(defun stock-plist-to-vector (stock)
+  "Convert STOCK plist to vector for tabulated-list display.
+Returns a vector with fields in display order:
+[code name price change-percent high low volume turnover open yestclose]"
+  (vector (plist-get stock :code)
+          (plist-get stock :name)
+          (plist-get stock :price)
+          (plist-get stock :change-percent)
+          (plist-get stock :high)
+          (plist-get stock :low)
+          (plist-get stock :volume)
+          (plist-get stock :turnover)
+          (plist-get stock :open)
+          (plist-get stock :yestclose)))
+
+(defun stock-plist-valid-p (stock)
+  "Check if STOCK plist contains valid data.
+Returns nil if the stock name is \"-\" (indicating invalid data)."
+  (not (string= (plist-get stock :name) "-")))
+
+;;;; Calculation Utilities
 
 (defun stock-make-percent (price yestclose open)
-  "Get stocks percent by (PRICE - YESTCLOSE) / YESTCLOSE, Return \"+/- xx%\".
-If OPEN is \"0.00\", percent just is 0.00%."
-  (if (zerop open)
-      "0.00%"
-    (unless (floatp price)
-      (setq price (float price)))
-    (unless (floatp yestclose)
-      (setq yestclose (float yestclose)))
-    (let ((result (/ (- price yestclose)
-                     (if (zerop yestclose)
-                         1.0 yestclose))))
-      (format "%s%0.2f%%" (if (> result 0) "+" "") (* result 100)))))
+  "Calculate percentage change from yesterday's close.
+PRICE is the current price (number or string).
+YESTCLOSE is yesterday's closing price (number or string).
+OPEN is the opening price (number or string).
+Returns a formatted string like \"+1.23%\" or \"-0.45%\".
+Returns \"0.00%\" if OPEN is zero (market not opened)."
+  (let ((price-num (if (numberp price) price (string-to-number price)))
+        (yest-num (if (numberp yestclose) yestclose (string-to-number yestclose)))
+        (open-num (if (numberp open) open (string-to-number open))))
+    (if (zerop open-num)
+        "0.00%"
+      (let* ((price-f (float price-num))
+             (yest-f (float yest-num))
+             (result (/ (- price-f yest-f)
+                        (if (zerop yest-f) 1.0 yest-f))))
+        (format "%s%0.2f%%" (if (> result 0) "+" "") (* result 100))))))
 
+(defun stock-format-volume (volume-str)
+  "Format VOLUME-STR (raw volume) to display format (in lots).
+Divides by 100 since 1 lot = 100 shares."
+  (number-to-string (/ (string-to-number volume-str) 100)))
+
+(defun stock-format-turnover (turnover-str)
+  "Format TURNOVER-STR (raw turnover) to display format.
+Divides by 10000 and appends 'W' suffix (万元)."
+  (format "%dW" (/ (string-to-number turnover-str) 10000)))
+
+;;;; Timer Utilities
 
 (defmacro stock-set-timeout (callback seconds)
-  "Like `setTimeout' for javascript.
-CALLBACK: callback function.
-SECONDS: integer of seconds."
+  "Schedule CALLBACK to run after SECONDS seconds.
+Similar to JavaScript's setTimeout.
+CALLBACK should be a function that accepts one argument (the timer)."
   `(let ((timer))
-     (setq timer (run-with-timer ,seconds nil (lambda ()
-                                                (cancel-timer timer)
-                                                (funcall ,callback timer))))))
+     (setq timer (run-with-timer ,seconds nil
+                                 (lambda ()
+                                   (cancel-timer timer)
+                                   (funcall ,callback timer))))))
 
+;;;; Time Utilities
 
-(defun stock-time-list-index (word)
-  "Get index of time list by WORD."
+(defun stock--time-list-index (word)
+  "Get index of WORD in decoded time list.
+WORD should be one of: seconds, minutes, hour, day, month, year, dow, dst, zone."
   (let ((words '("seconds" "minutes" "hour" "day" "month" "year" "dow" "dst" "zone")))
     (cl-position word words :test 'equal)))
 
+(defun stock--decoded-time-get (time word)
+  "Get component WORD from decoded TIME.
+Compatible with Emacs versions before 27.1 which lack decoded-time-* functions."
+  (nth (stock--time-list-index word) time))
 
-(defun stock-decoded-time (time word)
-  "Like decoded-time-xxx(Emacs '27.1').
-Get TIME object item by WORD."
-  (nth (stock-time-list-index word) time))
-
-
-(defun stock-time-number (str)
-  "STR of '12:00' to integer of 1200."
+(defun stock--hhmm-to-number (str)
+  "Convert time string STR like \"12:00\" to number 1200."
   (if (stringp str)
-      (string-to-number (replace-regexp-in-string (regexp-quote ":") "" str))
+      (string-to-number (replace-regexp-in-string ":" "" str))
     0))
 
+(defun stock--hhmm-to-time (hhmm)
+  "Convert HHMM (string or number) to Emacs time value.
+HHMM can be \"12:00\" or 1200."
+  (let ((hhmm-num (if (stringp hhmm)
+                      (stock--hhmm-to-number hhmm)
+                    hhmm)))
+    (let* ((now (decode-time))
+           (time-code (list 0
+                            (% hhmm-num 100)
+                            (/ hhmm-num 100)
+                            (stock--decoded-time-get now "day")
+                            (stock--decoded-time-get now "month")
+                            (stock--decoded-time-get now "year")
+                            (stock--decoded-time-get now "zone"))))
+      (apply #'encode-time time-code))))
 
-(defun stock-hhmm-to-time (hhmm &optional func)
-  "Convert HHMM to time.
-Callback FUNC is handle to time list."
-  (if (stringp hhmm)
-      (setq hhmm (stock-time-number hhmm)))
-  (let* ((now (decode-time))
-         (time-code (list 0 (% hhmm 100) (/ hhmm 100)
-                          (stock-decoded-time now "day")
-				                  (stock-decoded-time now "month")
-                          (stock-decoded-time now "year")
-                          (stock-decoded-time now "zone"))))
-    (if (functionp func)
-        (setq time-code (funcall func time-code)))
-    (apply #'encode-time time-code)))
+(defun stock--time-before-p (hhmm)
+  "Return t if current time is before HHMM.
+HHMM is a time string like \"9:00\"."
+  (time-less-p (current-time) (stock--hhmm-to-time hhmm)))
 
+(defun stock-trading-time-p ()
+  "Check if current time is within A-share trading hours.
+Trading hours are 9:00-11:30 (morning session) and 13:00-15:00 (afternoon session)."
+  (or (and (not (stock--time-before-p "9:00"))
+           (stock--time-before-p "11:30"))
+      (and (not (stock--time-before-p "13:00"))
+           (stock--time-before-p "15:00"))))
 
-(defun stock-compare-time (hhmm)
-  "Compare now and HHMM.
-If now less than time return t."
-  (let ((now (current-time))
-        (time (stock-hhmm-to-time hhmm)))
-    (time-less-p now time)))
+(defun stock-weekday-p ()
+  "Return t if today is a weekday (Monday to Friday).
+Note: This does not account for holidays."
+  (let ((dow (format-time-string "%w")))
+    (not (or (string= dow "0") (string= dow "6")))))
 
+(defun stock-working-time-p (buffer-name)
+  "Check if it's trading time and BUFFER-NAME window is visible.
+Returns t only when both conditions are met."
+  (and (get-buffer-window buffer-name)
+       (stock-trading-time-p)))
 
-(defun stock-readcache (path)
-  "Read cache file of stock codes.
-PATH: path of file dir."
-  (if (file-exists-p path)
-      (with-temp-buffer
-        (insert-file-contents path)
-        (read (current-buffer)))))
+;;;; Cache Utilities
 
+(defun stock-read-cache (path)
+  "Read stock codes list from cache file at PATH.
+Returns nil if file doesn't exist."
+  (when (file-exists-p path)
+    (with-temp-buffer
+      (insert-file-contents path)
+      (read (current-buffer)))))
 
-(defun stock-writecache (path codes)
-  "Write stock codes to cache file.
-PATH: path of file dir.
-CODES: list of stock codes."
+(defun stock-write-cache (path codes)
+  "Write stock CODES list to cache file at PATH."
   (with-temp-file path
     (prin1 codes (current-buffer))))
 
+;;;; List Utilities
 
 (defun stock-remove-nth-element (list index)
-  "Remove LIST element by INDEX."
-  (if (< (length list) (1+ index))
-      nil
-    (if (zerop index) (cdr list)
-      (let ((last (nthcdr (1- index) list)))
-        (setcdr last (cddr last))
+  "Remove element at INDEX from LIST.
+Returns nil if INDEX is out of bounds."
+  (when (< index (length list))
+    (if (zerop index)
+        (cdr list)
+      (let ((prev (nthcdr (1- index) list)))
+        (setcdr prev (cddr prev))
         list))))
 
+;;;; Display Utilities
 
-(defun stock-make-name (list _fields)
-  "Make stock name by decode `gb18030'.
-LIST: list of a stock value.
-FIELDS: list of field index."
-  (decode-coding-string (nth 1 list) 'gb18030))
+(defun stock-remove-text-properties (str)
+  "Remove all text properties from STR.
+Returns the plain string without any faces."
+  (let ((end (length str)))
+    (set-text-properties 0 end nil str)
+    str))
 
+;;;; Sorting Utilities
 
-(defun stock-make-change-percent (list fields)
-  "Call function `stock-make-percent' to make `change-percent'.
-LIST: list of a stock value.
-FIELDS: list of field index."
-  (stock-make-percent (string-to-number (nth (cdr (assoc 'price fields)) list))
-                       (string-to-number (nth (cdr (assoc 'yestclose fields)) list))
-                       (string-to-number (nth (cdr (assoc 'open fields)) list))))
+(defun stock-make-numeric-sorter (key)
+  "Create a sort function for tabulated-list by KEY.
+KEY is a plist key like :price, :change-percent.
+Returns a comparison function for descending numeric sort."
+  (lambda (a b)
+    (let ((val-a (string-to-number
+                  (plist-get (cadr a) key)))
+          (val-b (string-to-number
+                  (plist-get (cadr b) key))))
+      (> val-a val-b))))
 
-
-(defun stock-make-volume (list _fields)
-  "Get volume of display, current volume / 100.
-LIST: list of a stock value.
-FIELDS: list of field index."
-  (number-to-string (/ (string-to-number (nth 9 list)) 100)))
-
-
-(defun stock-make-turn-volume (list _fields)
-  "Get turn-volume of display, current turn-volume / 10000, unit W (10000).
-LIST: list of a stock value.
-FIELDS: list of field index."
-  (format "%dW" (/ (string-to-number (nth 10 list)) 10000)))
-
-
-(defmacro stock-number-sort (index)
-  "Create value of number sorting by INDEX."
-  `(lambda (a b)
-     (let ((get-percent-number (lambda (arg)
-                                 (string-to-number (aref (cadr arg) ,index)))))
-       (> (funcall get-percent-number a) (funcall get-percent-number b)))))
-
-
-(defun stock-valid-entry-p (entry)
-  "Check ENTRY data of valid."
-  (not (string= (aref (cadr entry) 1) "-")))
-
-
-(defun stock-trading-time-p ()
-  "Check if current time is within stock trading hours.
-Returns t if time is between 9:00-11:30 or 13:00-15:00."
-  (or (and (not (stock-compare-time "9:00")) (stock-compare-time "11:30"))
-      (and (not (stock-compare-time "13:00")) (stock-compare-time "15:00"))))
-
-
-(defun stock-working-time-p (buffer-name)
-  "Whether it is working time or not.
-If at 9:00 - 11:30 or 13:00 - 15:00 and visual buffer named
-BUFFER-NAME is existing,
-return t. Otherwise, return nil."
-  (if (get-buffer-window buffer-name)
-      (stock-trading-time-p)
-    nil))
-
-
-(defun stock-weekday-p ()
-  "Whether it is weekend or not."
-  (let ((week (format-time-string "%w")))
-    (not (or (string= week "0") (string= week "6")))))
-
-
-(defun stock-remove-face (faced)
-  "Remove face for FACED to extract text."
-  (let ((end (length faced)))
-    (set-text-properties 0 end nil faced)
-    faced))
-
+;; Legacy compatibility - keeping old function name for backward compatibility
+(defalias 'stock-readcache 'stock-read-cache)
+(defalias 'stock-writecache 'stock-write-cache)
 
 (provide 'stock-utils)
 

@@ -1,8 +1,8 @@
-;;; stock.el --- A-stocks real-time data  -*- lexical-binding: t; -*-
+;;; stock.el --- A-share real-time stock data dashboard  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2025 Kinneyzhang
 
-;; Author：Kinney Zhang <kinneyzhang666@gmail.com>
+;; Author: Kinney Zhang <kinneyzhang666@gmail.com>
 ;; URL: https://github.com/Kinneyzhang/stock
 ;; Original Author: zakudriver <zy.hua1122@gmail.com>
 ;; Original URL: https://github.com/zakudriver/achive
@@ -27,8 +27,20 @@
 
 ;;; Commentary:
 
-;; Stock is a plug-in based on api of Sina that creates a dashboard displaying real-time data of a-share indexs and stocks.
-;; Thanks for the super-fast Sina api, and stock performs so well to update data automatically.
+;; Stock is an Emacs package for displaying A-share (Chinese stock market)
+;; real-time data.  It provides:
+;;
+;; - A dashboard buffer showing stock indices and individual stocks
+;; - Mode-line and header-line display for quick price monitoring
+;; - Auto-refresh during trading hours (9:00-11:30, 13:00-15:00)
+;; - Stock search and favorites management
+;;
+;; Main entry points:
+;; - `stock' - Open the main stock dashboard
+;; - `stock-modeline-mode' - Toggle mode-line stock display
+;; - `stock-headerline-mode' - Toggle header-line stock display
+;;
+;; Data is fetched from Sina Finance API.
 
 ;;; Code:
 
@@ -38,64 +50,60 @@
 (require 'url)
 (require 'stock-utils)
 
-
-(defvar url-http-response-status 0)
-
+;; Declare external variable to avoid compiler warning
+(defvar url-http-response-status)
 
 ;;;; Customization
 
 (defgroup stock nil
-  "Settings for `stock'."
+  "A-share real-time stock data dashboard."
   :prefix "stock-"
-  :group 'utils)
-
+  :group 'tools
+  :link '(url-link :tag "GitHub" "https://github.com/Kinneyzhang/stock"))
 
 (defcustom stock-index-list '("sh000001" "sz399001" "sz399006")
-  "List of composite index."
+  "List of stock index codes to display.
+Default includes Shanghai Composite, Shenzhen Component, and ChiNext.
+Format: sh/sz + 6-digit code."
   :group 'stock
-  :type 'list)
-
+  :type '(repeat string))
 
 (defcustom stock-code-list '("sh600036" "sz000625")
-  "List of stocks."
+  "Default list of stock codes for new users.
+These are used when no cache file exists."
   :group 'stock
-  :type 'list)
-
+  :type '(repeat string))
 
 (defcustom stock-buffer-name "*A Chive*"
-  "Buffer name of stock board."
+  "Buffer name for the main stock dashboard."
   :group 'stock
   :type 'string)
 
 (defcustom stock-search-buffer-name "*A Chive - results -*"
-  "Buffer name of stock search board."
+  "Buffer name for stock search results."
   :group 'stock
   :type 'string)
 
-
 (defcustom stock-auto-refresh t
-  "Whether to refresh automatically."
+  "Non-nil means auto-refresh stock data during trading hours."
   :group 'stock
   :type 'boolean)
 
-
 (defcustom stock-refresh-seconds 5
-  "Seconds of automatic refresh time."
+  "Interval in seconds between auto-refresh cycles."
   :group 'stock
   :type 'integer)
 
-
 (defcustom stock-cache-path (concat user-emacs-directory ".stock")
-  "Path of cache."
+  "Path to the cache file storing favorite stock codes."
   :group 'stock
-  :type 'string)
+  :type 'file)
 
 (defcustom stock-colouring t
-  "Whether to apply face.
-If it's nil will be low-key, you can peek at it at company time."
+  "Non-nil means apply color faces to price changes.
+When nil, display is monochrome (useful for discretion at work)."
   :group 'stock
-  :type 'string)
-
+  :type 'boolean)
 
 (defcustom stock-modeline-stocks nil
   "List of stock codes to display in mode-line.
@@ -103,19 +111,16 @@ Example: \\='(\"sh600036\" \"sz000625\")."
   :group 'stock
   :type '(repeat string))
 
-
 (defcustom stock-modeline-refresh-seconds 1
-  "Seconds between mode-line refresh."
+  "Interval in seconds between mode-line refresh."
   :group 'stock
   :type 'integer)
 
-
 (defcustom stock-modeline-format "[%n:%p]"
-  "Format string for each stock in mode-line.
-%n - stock name, %p - change percent."
+  "Format string for mode-line stock display.
+%n is replaced with stock name, %p with change percent."
   :group 'stock
   :type 'string)
-
 
 (defcustom stock-headerline-stocks nil
   "List of stock codes to display in header-line.
@@ -123,472 +128,510 @@ Example: \\='(\"sh600036\" \"sz000625\")."
   :group 'stock
   :type '(repeat string))
 
-
 (defcustom stock-headerline-refresh-seconds 1
-  "Seconds between header-line refresh."
+  "Interval in seconds between header-line refresh."
   :group 'stock
   :type 'integer)
 
-
 (defcustom stock-headerline-format "[%n:%p]"
-  "Format string for each stock in header-line.
-%n - stock name, %p - change percent."
+  "Format string for header-line stock display.
+%n is replaced with stock name, %p with change percent."
   :group 'stock
   :type 'string)
 
-;;;;; faces
+;;;; Faces
 
 (defface stock-face-up
-  '((t (:inherit (error))))
-  "Face used when share prices are rising."
+  '((t (:inherit error)))
+  "Face for rising stock prices (red in Chinese markets)."
   :group 'stock)
-
 
 (defface stock-face-down
-  '((t :inherit (success)))
-  "Face used when share prices are dropping."
+  '((t (:inherit success)))
+  "Face for falling stock prices (green in Chinese markets)."
   :group 'stock)
-
 
 (defface stock-face-constant
-  '((t :inherit (shadow)))
-  "Face used when share prices are dropping."
+  '((t (:inherit shadow)))
+  "Face for unchanged stock prices."
   :group 'stock)
-
 
 (defface stock-face-index-name
   '((t (:inherit (font-lock-keyword-face bold))))
-  "Face used for index name."
+  "Face for stock index names (e.g., Shanghai Composite)."
   :group 'stock)
 
-;;;; constants
+;;;; Constants
 
-(defconst stock-api "https://hq.sinajs.cn"
-  "Stocks Api.")
+(defconst stock-api-url "https://hq.sinajs.cn"
+  "Sina Finance API base URL.")
 
+;; Raw API response field indices (0-indexed from comma-separated values):
+;; 0: name, 1: open, 2: yestclose, 3: price, 4: high, 5: low,
+;; 6: bid, 7: ask, 8: volume, 9: turnover, ...
+(defconst stock--field-specs
+  '((:code       . 0)      ; Stock code (from request, not API)
+    (:name       . nil)    ; Stock name (needs decoding)
+    (:price      . 4)      ; Current price
+    (:change-percent . nil) ; Calculated field
+    (:high       . 5)      ; Today's high
+    (:low        . 6)      ; Today's low
+    (:volume     . nil)    ; Trading volume (calculated)
+    (:turnover   . nil)    ; Turnover amount (calculated)
+    (:open       . 2)      ; Opening price
+    (:yestclose  . 3))     ; Yesterday's close
+  "Mapping of plist keys to API response field indices.
+nil values indicate calculated fields.")
 
-(defconst stock-field-index-list
-  '((code . 0) (name . stock-make-name) (price . 4) (change-percent . stock-make-change-percent)
-    (high . 5) (low . 6) (volume . stock-make-volume) (turn-volume . stock-make-turn-volume) (open . 2) (yestclose . 3))
-  "Index or fucntion of each piece of data.")
+;;;; Internal Variables
 
+(defvar stock--search-codes nil
+  "Current search query stock codes.")
 
-(defconst stock-visual-columns (vector
-                                 '("股票代码" 8 nil)
-                                 '("名称" 10 nil)
-                                 (list "当前价" 10 (stock-number-sort 2))
-                                 (list "涨跌幅" 7 (stock-number-sort 3))
-                                 (list "最高价" 10 (stock-number-sort 4))
-                                 (list "最低价" 10 (stock-number-sort 5))
-                                 (list "成交量" 10 (stock-number-sort 6))
-                                 (list "成交额" 10 (stock-number-sort 7))
-                                 (list "开盘价" 10 (stock-number-sort 8))
-                                 (list "昨日收盘价" 10 (stock-number-sort 9)))
-  "Realtime board columns.")
+(defvar stock--favorite-codes nil
+  "User's favorite stock codes (persisted to cache).")
 
-;;;;; variables
+(defvar stock--entry-cache nil
+  "Cached stock entries for display.
+Each entry is (CODE . PLIST) where PLIST contains stock data.")
 
-(defvar stock-prev-point nil
-  "Point of before render.")
+(defvar stock--pop-to-buffer-action nil
+  "Custom action for `pop-to-buffer' when switching to stock buffer.")
 
-
-(defvar stock-search-codes nil
-  "Search code list.")
-
-
-(defvar stock-stocks nil
-  "Realtime stocks code list.")
-
-
-(defvar stock-pop-to-buffer-action nil
-  "Action to use internally when `pop-to-buffer' is called.")
-
-
-(defvar stock-entry-list nil
-  "Cache data for manual render.")
-
+;;;; Mode-line Variables
 
 (defvar stock-modeline-string ""
-  "String to display in mode-line.")
+  "Current mode-line display string.")
 
+(defvar stock--modeline-timer nil
+  "Timer object for mode-line refresh.")
 
-(defvar stock-modeline-timer nil
-  "Timer for mode-line refresh.")
+(defvar stock--modeline-data nil
+  "Cached stock data for mode-line.")
 
-
-(defvar stock-modeline-data nil
-  "Cached stock data for mode-line display.")
-
+;;;; Header-line Variables
 
 (defvar stock-headerline-string ""
-  "String to display in header-line.")
+  "Current header-line display string.")
 
+(defvar stock--headerline-timer nil
+  "Timer object for header-line refresh.")
 
-(defvar stock-headerline-timer nil
-  "Timer for header-line refresh.")
+(defvar stock--headerline-data nil
+  "Cached stock data for header-line.")
 
+;;;; Table Column Definition
 
-(defvar stock-headerline-data nil
-  "Cached stock data for header-line display.")
+(defun stock--make-plist-sorter (key)
+  "Create a sort function for tabulated-list by plist KEY."
+  (lambda (a b)
+    (let ((val-a (string-to-number (plist-get (cadr a) key)))
+          (val-b (string-to-number (plist-get (cadr b) key))))
+      (> val-a val-b))))
 
-;;;;; functions
+(defconst stock--visual-columns
+  (vector
+   '("股票代码" 8 nil)
+   '("名称" 10 nil)
+   (list "当前价" 10 (stock--make-plist-sorter :price))
+   (list "涨跌幅" 7 (stock--make-plist-sorter :change-percent))
+   (list "最高价" 10 (stock--make-plist-sorter :high))
+   (list "最低价" 10 (stock--make-plist-sorter :low))
+   (list "成交量" 10 (stock--make-plist-sorter :volume))
+   (list "成交额" 10 (stock--make-plist-sorter :turnover))
+   (list "开盘价" 10 (stock--make-plist-sorter :open))
+   (list "昨日收盘价" 10 (stock--make-plist-sorter :yestclose)))
+  "Column definitions for the stock dashboard.
+Each column is (NAME WIDTH SORT-FN).")
 
-(defun stock-make-request-url (api parameter)
-  "Make sina request url.
-API: shares api.
-PARAMETER: request url parameter."
-  (format "%s/list=%s" api (string-join parameter ",")))
+;;;; API Request Functions
 
+(defun stock--make-request-url (codes)
+  "Build API URL for stock CODES."
+  (format "%s/list=%s" stock-api-url (string-join codes ",")))
 
-(defun stock-request (url callback)
-  "Handle request by URL.
-CALLBACK: function of after response."
+(defun stock--request (url callback)
+  "Make async HTTP request to URL, call CALLBACK on success."
   (let ((url-request-method "POST")
-        (url-request-extra-headers '(("Content-Type" . "application/javascript;charset=UTF-8") ("Referer" . "https://finance.sina.com.cn"))))
-    (url-retrieve url (lambda (_status)
-                        (let ((inhibit-message t))
-                          (message "stock: %s at %s" "The request is successful." (format-time-string "%T")))
-                        (funcall callback)) nil 'silent)))
+        (url-request-extra-headers
+         '(("Content-Type" . "application/javascript;charset=UTF-8")
+           ("Referer" . "https://finance.sina.com.cn"))))
+    (url-retrieve url
+                  (lambda (_status)
+                    (let ((inhibit-message t))
+                      (message "stock: request successful at %s"
+                               (format-time-string "%T")))
+                    (funcall callback))
+                  nil 'silent)))
 
+(defun stock--parse-response ()
+  "Parse HTTP response body, return decoded string."
+  (unless (= 200 url-http-response-status)
+    (error "Stock API request failed with status %d" url-http-response-status))
+  (let ((body (buffer-substring-no-properties
+               (progn (goto-char (point-min))
+                      (search-forward "\n\n")
+                      (point))
+               (point-max))))
+    (decode-coding-string body 'gb18030)))
 
-(defun stock-parse-response ()
-  "Parse sina http response result by body."
-  (if (/= 200 url-http-response-status)
-      (error "Internal Server Error"))
-  (let ((resp-gbcode (with-current-buffer (current-buffer)
-                       (buffer-substring-no-properties (search-forward "\n\n") (point-max)))))
-    (decode-coding-string resp-gbcode 'gb18030)))
+;;;; Data Parsing Functions
 
+(defun stock--parse-raw-values (code resp-str)
+  "Extract values for CODE from API response RESP-STR.
+Returns list of comma-separated values or nil if not found."
+  (when (string-match (format "%s=\"\\([^\"]+\\)\"" code) resp-str)
+    (split-string (match-string 1 resp-str) ",")))
 
-(defun stock-format-content (codes resp-str)
-  "Format response string to buffer string.
-RESP-STR: string of response body.
-CODES: stocks list of request parameters.
-Return index and stocks data."
-  (let ((str-list (cl-loop with i = 0
-                           for it in codes
-                           if (string-match (format "%s=\"\\([^\"]+\\)\"" it) resp-str)
-                           collect (format "%s,%s" (nth i codes) (match-string 1 resp-str))
-                           else
-                           collect (nth i codes) end
-                           do (cl-incf i))))
-    (cl-loop for it in str-list
-             with temp = nil
-             do (setq temp (stock-format-row it))
-             collect (list (nth 0 temp)
-                           (apply 'vector temp)))))
+(defun stock--raw-to-plist (code values)
+  "Convert raw VALUES list to plist for stock CODE.
+VALUES is the comma-separated data from API."
+  (if (or (null values) (< (length values) 10))
+      ;; Invalid data - return placeholder
+      (list :code code
+            :name "-"
+            :price "-"
+            :change-percent "-"
+            :high "-"
+            :low "-"
+            :volume "-"
+            :turnover "-"
+            :open "-"
+            :yestclose "-")
+    ;; Parse actual data
+    (let* ((name (decode-coding-string (nth 0 values) 'gb18030))
+           (open (nth 1 values))
+           (yestclose (nth 2 values))
+           (price (nth 3 values))
+           (high (nth 4 values))
+           (low (nth 5 values))
+           (volume-raw (nth 8 values))
+           (turnover-raw (nth 9 values))
+           (change-percent (stock-make-percent price yestclose open))
+           (volume (stock-format-volume volume-raw))
+           (turnover (stock-format-turnover turnover-raw)))
+      (list :code code
+            :name name
+            :price price
+            :change-percent change-percent
+            :high high
+            :low low
+            :volume volume
+            :turnover turnover
+            :open open
+            :yestclose yestclose))))
 
+(defun stock--parse-response-to-entries (codes resp-str)
+  "Parse response RESP-STR for CODES into entry list.
+Returns list of (CODE . PLIST) entries."
+  (mapcar (lambda (code)
+            (let* ((values (stock--parse-raw-values code resp-str))
+                   (plist (stock--raw-to-plist code values)))
+              (cons code plist)))
+          codes))
 
-(defun stock-format-row (row-str)
-  "Format row content.
-ROW-STR: string of row."
-  (let ((value-list (split-string row-str ",")))
-    (if (length= value-list 1)
-        (append value-list (make-list 9 "-"))
-      (cl-loop for (_k . v) in stock-field-index-list
-               collect (if (functionp v)
-                           (funcall v value-list stock-field-index-list)
-                         (nth v value-list))))))
+(defun stock--entry-valid-p (entry)
+  "Check if ENTRY contains valid stock data."
+  (not (string= (plist-get (cdr entry) :name) "-")))
 
+;;;; Display Conversion Functions
 
-(defun stock-validate-request (codes callback)
-  "Validate that the CODES is valid, then call CALLBACK function."
-  (stock-request (stock-make-request-url stock-api codes)
-                  (lambda ()
-                    (funcall callback (seq-filter
-                                       #'stock-valid-entry-p
-                                       (stock-format-content codes (stock-parse-response)))))))
+(defun stock--plist-to-vector (plist)
+  "Convert stock PLIST to vector for tabulated-list display."
+  (vector (plist-get plist :code)
+          (plist-get plist :name)
+          (plist-get plist :price)
+          (plist-get plist :change-percent)
+          (plist-get plist :high)
+          (plist-get plist :low)
+          (plist-get plist :volume)
+          (plist-get plist :turnover)
+          (plist-get plist :open)
+          (plist-get plist :yestclose)))
 
+(defun stock--entry-to-tabulated (entry)
+  "Convert ENTRY (CODE . PLIST) to tabulated-list format.
+Returns (ID [COLUMN-VALUES...] PLIST) for sorting access."
+  (let ((code (car entry))
+        (plist (cdr entry)))
+    (list code (stock--plist-to-vector plist) plist)))
 
-(defun stock-render-request (buffer-name codes &optional callback)
-  "Handle request by stock CODES, and render buffer of BUFFER-NAME.
-CALLBACK: callback function after the rendering."
-  (stock-request (stock-make-request-url stock-api codes)
-                  (lambda ()
-                    (setq stock-entry-list (stock-format-content codes
-                                                                   (stock-parse-response)))
-                    (stock-render buffer-name)
-                    
-                    (if (functionp callback)
-                        (funcall callback stock-entry-list)))))
+;;;; Face Application Functions
 
+(defun stock--get-change-face (percent-str)
+  "Return face for change PERCENT-STR."
+  (let ((num (string-to-number percent-str)))
+    (cond ((> num 0) 'stock-face-up)
+          ((< num 0) 'stock-face-down)
+          (t 'stock-face-constant))))
 
-(defun stock-render (buffer-name &optional manual)
-  "Render visual buffer of BUFFER-NAME.
-If MANUAL is t and `stock-colouring' is nil,
-entry will remove face before render."
-  (let ((entries (if stock-colouring
-                     (mapcar #'stock-propertize-entry-face
-                             stock-entry-list)
-                   stock-entry-list)))
+(defun stock--propertize-entry (entry)
+  "Apply faces to tabulated ENTRY based on price change.
+ENTRY is (ID VECTOR PLIST) format."
+  (let* ((id (car entry))
+         (vec (cadr entry))
+         (plist (caddr entry))
+         (percent (plist-get plist :change-percent))
+         (is-index (member id stock-index-list)))
+    ;; Apply index face to code and name
+    (when is-index
+      (aset vec 0 (propertize (aref vec 0) 'face 'stock-face-index-name))
+      (aset vec 1 (propertize (aref vec 1) 'face 'stock-face-index-name)))
+    ;; Apply change face to percent
+    (aset vec 3 (propertize (aref vec 3) 'face (stock--get-change-face percent)))
+    entry))
 
-    (if (and manual (not stock-colouring))
-        (setq entries (mapcar #'stock-remove-entry-face
-                              stock-entry-list)))
-    
+(defun stock--remove-entry-faces (entry)
+  "Remove all faces from tabulated ENTRY."
+  (let* ((id (car entry))
+         (vec (cadr entry))
+         (is-index (member id stock-index-list)))
+    (when is-index
+      (stock-remove-text-properties (aref vec 0))
+      (stock-remove-text-properties (aref vec 1)))
+    (stock-remove-text-properties (aref vec 3))
+    entry))
+
+;;;; Rendering Functions
+
+(defun stock--render-buffer (buffer-name &optional manual)
+  "Render stock data in BUFFER-NAME.
+If MANUAL is t and `stock-colouring' is nil, remove faces."
+  (let* ((tabulated-entries (mapcar #'stock--entry-to-tabulated
+                                    stock--entry-cache))
+         (entries (if stock-colouring
+                      (mapcar #'stock--propertize-entry tabulated-entries)
+                    tabulated-entries)))
+    (when (and manual (not stock-colouring))
+      (setq entries (mapcar #'stock--remove-entry-faces tabulated-entries)))
     (with-current-buffer buffer-name
-      (setq tabulated-list-entries entries)
+      (setq tabulated-list-entries
+            (mapcar (lambda (e) (list (car e) (cadr e))) entries))
       (tabulated-list-print t t))))
 
+(defun stock--fetch-and-render (buffer-name codes &optional callback)
+  "Fetch data for CODES and render in BUFFER-NAME.
+Call CALLBACK with entries after rendering."
+  (stock--request
+   (stock--make-request-url codes)
+   (lambda ()
+     (let ((resp (stock--parse-response)))
+       (setq stock--entry-cache (stock--parse-response-to-entries codes resp))
+       (stock--render-buffer buffer-name)
+       (when callback
+         (funcall callback stock--entry-cache))))))
 
-(defun stock-refresh ()
-  "Referer stock visual buffer or stock search visual buffer."
-  (if (get-buffer-window stock-buffer-name)
-      (stock-render-request stock-buffer-name (append stock-index-list stock-stocks)))
-  (if (get-buffer-window stock-search-buffer-name)
-      (stock-render-request stock-search-buffer-name stock-search-codes)))
+(defun stock--validate-and-callback (codes callback)
+  "Validate CODES are real stocks, call CALLBACK with valid entries."
+  (stock--request
+   (stock--make-request-url codes)
+   (lambda ()
+     (let* ((resp (stock--parse-response))
+            (entries (stock--parse-response-to-entries codes resp))
+            (valid (seq-filter #'stock--entry-valid-p entries)))
+       (funcall callback valid)))))
 
+;;;; Timer and Refresh Functions
 
-(defun stock-timer-alive-p ()
-  "Check that the timer is alive."
+(defun stock--timer-alive-p ()
+  "Return t if stock buffer exists."
   (get-buffer stock-buffer-name))
 
+(defun stock--schedule-refresh ()
+  "Schedule next auto-refresh cycle."
+  (stock-set-timeout #'stock--loop-refresh stock-refresh-seconds))
 
-(defun stock-switch-visual (buffer-name)
-  "Switch to visual buffer by BUFFER-NAME."
-  (pop-to-buffer buffer-name stock-pop-to-buffer-action)
+(defun stock--loop-refresh (_timer)
+  "Main refresh loop, called by timer."
+  (when (and (stock--timer-alive-p) (stock-weekday-p))
+    (if (stock-working-time-p stock-buffer-name)
+        (stock--fetch-and-render
+         stock-buffer-name
+         (append stock-index-list stock--favorite-codes)
+         (lambda (_) (stock--schedule-refresh)))
+      (stock--schedule-refresh))))
+
+;;;; Initialization
+
+(defun stock--init ()
+  "Initialize stock, loading favorites from cache."
+  (let ((cached (stock-read-cache stock-cache-path)))
+    (if cached
+        (setq stock--favorite-codes cached)
+      (setq stock--favorite-codes stock-code-list)
+      (stock-write-cache stock-cache-path stock--favorite-codes))))
+
+(defun stock--switch-to-buffer (buffer-name)
+  "Switch to BUFFER-NAME and enable stock-visual-mode."
+  (pop-to-buffer buffer-name stock--pop-to-buffer-action)
   (stock-visual-mode))
 
-
-(defun stock-loop-refresh (_timer)
-  "Loop to refresh."
-  (if (and (stock-timer-alive-p) (stock-weekday-p))
-      (if (stock-working-time-p stock-buffer-name)
-          (stock-render-request stock-buffer-name
-                                 (append stock-index-list stock-stocks)
-                                 (lambda (_resp)
-                                   (stock-handle-auto-refresh)))
-        (stock-handle-auto-refresh))))
-
-
-(defun stock-handle-auto-refresh ()
-  "Automatic refresh."
-  (stock-set-timeout #'stock-loop-refresh
-                      stock-refresh-seconds))
-
-
-(defun stock-init ()
-  "Init program. Read cache codes from file."
-  (let ((cache (stock-readcache stock-cache-path)))
-    (unless cache
-      (stock-writecache stock-cache-path stock-code-list)
-      (setq cache stock-code-list))
-    (setq stock-stocks cache)))
-
-
-(defun stock-propertize-entry-face (entry)
-  "Propertize ENTRY."
-  (let* ((id (car entry))
-         (data (cadr entry))
-         (percent (aref data 3))
-         (percent-number (string-to-number percent)))
-
-    (when (cl-position id stock-index-list :test 'string=)
-      (aset data 0 (propertize (aref data 0) 'face 'stock-face-index-name))
-      (aset data 1 (propertize (aref data 1) 'face 'stock-face-index-name)))
-
-    (aset data 3 (propertize percent 'face (cond
-                                            ((> percent-number 0)
-                                             'stock-face-up)
-                                            ((< percent-number 0)
-                                             'stock-face-down)
-                                            (t 'stock-face-constant))))
-    entry))
-
-
-(defun stock-remove-entry-face (entry)
-  "Remove ENTRY properties."
-  (let* ((id (car entry))
-         (data (cadr entry)))
-    (when (cl-position id stock-index-list :test 'string=)
-      (stock-remove-face (aref data 0))
-      (stock-remove-face (aref data 1)))
-
-    (stock-remove-face (aref data 3))
-    entry))
-
-;;;;; interactive
+;;;; Interactive Commands
 
 ;;;###autoload
 (defun stock ()
-  "Launch stock and switch to visual buffer."
+  "Open the stock dashboard showing indices and favorite stocks."
   (interactive)
-  (stock-init)
-
-  (let ((timer-alive (stock-timer-alive-p)))
-
-    (stock-switch-visual stock-buffer-name)
-    (stock-render-request stock-buffer-name
-                           (append stock-index-list stock-stocks)
-                           (lambda (_resp)
-                             (if (and stock-auto-refresh (not timer-alive))
-                                 (stock-handle-auto-refresh))))))
-
+  (stock--init)
+  (let ((was-alive (stock--timer-alive-p)))
+    (stock--switch-to-buffer stock-buffer-name)
+    (stock--fetch-and-render
+     stock-buffer-name
+     (append stock-index-list stock--favorite-codes)
+     (lambda (_)
+       (when (and stock-auto-refresh (not was-alive))
+         (stock--schedule-refresh))))))
 
 ;;;###autoload
-;; (defun stock-exit ()
-;;   "Exit stock."
-;;   (interactive)
-;;   (quit-window t)
-;;   (message "Stock has been killed."))
-
+(defun stock-refresh ()
+  "Manually refresh stock data."
+  (interactive)
+  (when (get-buffer-window stock-buffer-name)
+    (stock--fetch-and-render stock-buffer-name
+                              (append stock-index-list stock--favorite-codes)))
+  (when (get-buffer-window stock-search-buffer-name)
+    (stock--fetch-and-render stock-search-buffer-name stock--search-codes)))
 
 ;;;###autoload
 (defun stock-search (codes)
-  "Search stock by codes.
-CODES: string of stocks list."
-  (interactive "sPlease input code to search: ")
-  (setq stock-search-codes (split-string codes))
-  (stock-switch-visual stock-search-buffer-name)
-  (stock-render-request stock-search-buffer-name stock-search-codes))
-
+  "Search for stocks by CODES (space-separated)."
+  (interactive "sEnter stock codes to search: ")
+  (setq stock--search-codes (split-string codes))
+  (stock--switch-to-buffer stock-search-buffer-name)
+  (stock--fetch-and-render stock-search-buffer-name stock--search-codes))
 
 ;;;###autoload
 (defun stock-add (codes)
-  "Add stocks by codes.
-CODES: string of stocks list."
-  (interactive "sPlease input code to add: ")
-  (setq codes (split-string codes))
-  (stock-validate-request
-   codes
-   (lambda (resp)
-     (setq codes (mapcar #'car resp))
-     
-     (when codes
-       (setq stock-stocks (append stock-stocks codes))
-       (stock-writecache stock-cache-path stock-stocks)
-       (stock-render-request stock-buffer-name
-                              (append stock-index-list stock-stocks)
-                              (lambda (_resp)
-                                (message "[%s] have been added."
-                                         (mapconcat 'identity codes ", "))))))))
-
+  "Add stocks by CODES (space-separated) to favorites."
+  (interactive "sEnter stock codes to add: ")
+  (let ((code-list (split-string codes)))
+    (stock--validate-and-callback
+     code-list
+     (lambda (valid-entries)
+       (let ((valid-codes (mapcar #'car valid-entries)))
+         (when valid-codes
+           (setq stock--favorite-codes
+                 (delete-dups (append stock--favorite-codes valid-codes)))
+           (stock-write-cache stock-cache-path stock--favorite-codes)
+           (stock--fetch-and-render
+            stock-buffer-name
+            (append stock-index-list stock--favorite-codes)
+            (lambda (_)
+              (message "Added: [%s]" (string-join valid-codes ", "))))))))))
 
 ;;;###autoload
 (defun stock-remove ()
-  "Remove stocks."
+  "Remove a stock from favorites."
   (interactive)
-  (let* ((code (completing-read "Please select the stock code to remove: "
-                                stock-stocks
-                                nil
-                                t
-                                nil
-                                nil
-                                nil))
-         (index (cl-position code stock-stocks :test 'string=)))
-    (when index
-      (setq stock-stocks (stock-remove-nth-element stock-stocks index))
-      (stock-writecache stock-cache-path stock-stocks)
-      (stock-render-request stock-buffer-name (append stock-index-list stock-stocks)
-                             (lambda (_resp)
-                               (message "<%s> have been removed." code))))))
-
+  (if (null stock--favorite-codes)
+      (message "No favorite stocks to remove.")
+    (let* ((code (completing-read "Select stock to remove: "
+                                  stock--favorite-codes nil t))
+           (idx (cl-position code stock--favorite-codes :test #'string=)))
+      (when idx
+        (setq stock--favorite-codes
+              (stock-remove-nth-element stock--favorite-codes idx))
+        (stock-write-cache stock-cache-path stock--favorite-codes)
+        (stock--fetch-and-render
+         stock-buffer-name
+         (append stock-index-list stock--favorite-codes)
+         (lambda (_)
+           (message "Removed: <%s>" code)))))))
 
 ;;;###autoload
 (defun stock-switch-colouring ()
-  "Manual switch colouring. It's handy for emergencies."
+  "Toggle color display on/off (for discrete viewing)."
   (interactive)
   (setq stock-colouring (not stock-colouring))
-  (stock-render (buffer-name) t))
+  (stock--render-buffer (buffer-name) t)
+  (message "Colouring %s" (if stock-colouring "enabled" "disabled")))
 
-;;;;; mode
+;;;; Major Mode
 
 (defvar stock-visual-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map "+" 'stock-add)
-    (define-key map "_" 'stock-remove)
-    (define-key map "c" 'stock-switch-colouring)
+    (define-key map "+" #'stock-add)
+    (define-key map "_" #'stock-remove)
+    (define-key map "c" #'stock-switch-colouring)
+    (define-key map "g" #'stock-refresh)
+    (define-key map "s" #'stock-search)
     map)
   "Keymap for `stock-visual-mode'.")
 
-
 (define-derived-mode stock-visual-mode tabulated-list-mode "Stock"
-  "Major mode for avhice real-time board."
-  (setq tabulated-list-format stock-visual-columns)
+  "Major mode for A-share stock real-time dashboard.
+
+Key bindings:
+\\{stock-visual-mode-map}"
+  (setq tabulated-list-format stock--visual-columns)
   (setq tabulated-list-sort-key nil)
-  (add-hook 'tabulated-list-revert-hook 'stock-refresh nil t)
+  (add-hook 'tabulated-list-revert-hook #'stock-refresh nil t)
   (tabulated-list-init-header)
-  (tablist-minor-mode))
+  ;; tablist-minor-mode is optional, only enable if available
+  (when (fboundp 'tablist-minor-mode)
+    (tablist-minor-mode)))
 
+;;;; Mode-line and Header-line Common Functions
 
-;;;;; mode-line and header-line common functions
-
-(defun stock-format-stock-string (format-str name percent)
-  "Format stock string by replacing %n with NAME and %p with PERCENT in FORMAT-STR.
-Uses `format-spec' for efficient single-pass string replacement."
-  (format-spec format-str
-               `((?n . ,name)
-                 (?p . ,percent))))
-
-
-(defun stock--format-stock-entry (entry format-str)
-  "Format a single stock ENTRY using FORMAT-STR for display."
-  (let* ((data (cadr entry))
-         (name (aref data 1))
-         (percent (aref data 3))
-         (percent-number (string-to-number percent))
-         (face (cond
-                ((> percent-number 0) 'stock-face-up)
-                ((< percent-number 0) 'stock-face-down)
-                (t 'stock-face-constant))))
-    (propertize (stock-format-stock-string format-str name percent)
+(defun stock--format-line-entry (entry format-str)
+  "Format ENTRY for line display using FORMAT-STR.
+ENTRY is (CODE . PLIST)."
+  (let* ((plist (cdr entry))
+         (name (plist-get plist :name))
+         (percent (plist-get plist :change-percent))
+         (face (stock--get-change-face percent)))
+    (propertize (format-spec format-str
+                             `((?n . ,name)
+                               (?p . ,percent)))
                 'face face)))
 
 
-;;;;; mode-line functions
+;;;; Mode-line Functions
 
-(defun stock-modeline-format-stock (entry)
-  "Format a single stock ENTRY for mode-line display."
-  (stock--format-stock-entry entry stock-modeline-format))
-
-
-(defun stock-modeline-update-string (entries)
-  "Update `stock-modeline-string' with stock ENTRIES data."
-  (setq stock-modeline-data entries)
+(defun stock--modeline-update (entries)
+  "Update mode-line with ENTRIES data."
+  (setq stock--modeline-data entries)
   (setq stock-modeline-string
         (if entries
-            (mapconcat #'stock-modeline-format-stock entries " ")
+            (mapconcat (lambda (e)
+                         (stock--format-line-entry e stock-modeline-format))
+                       entries " ")
           ""))
   (force-mode-line-update t))
 
-
-(defun stock-modeline-fetch ()
+(defun stock--modeline-fetch ()
   "Fetch stock data for mode-line display."
   (when stock-modeline-stocks
-    (stock-request
-     (stock-make-request-url stock-api stock-modeline-stocks)
+    (stock--request
+     (stock--make-request-url stock-modeline-stocks)
      (lambda ()
-       (let ((entries (seq-filter
-                       #'stock-valid-entry-p
-                       (stock-format-content stock-modeline-stocks
-                                             (stock-parse-response)))))
-         (stock-modeline-update-string entries))))))
+       (let* ((resp (stock--parse-response))
+              (entries (stock--parse-response-to-entries
+                        stock-modeline-stocks resp))
+              (valid (seq-filter #'stock--entry-valid-p entries)))
+         (stock--modeline-update valid))))))
 
-
-(defun stock-modeline-loop-refresh (_timer)
-  "Loop to refresh mode-line stock data."
-  (when stock-modeline-timer
-    (if (and (stock-weekday-p)
-             (stock-trading-time-p))
-        (stock-modeline-fetch))
-    (stock-modeline-handle-refresh)))
-
-
-(defun stock-modeline-handle-refresh ()
+(defun stock--modeline-schedule ()
   "Schedule next mode-line refresh."
-  (when stock-modeline-timer
-    (stock-set-timeout #'stock-modeline-loop-refresh
+  (when stock--modeline-timer
+    (stock-set-timeout #'stock--modeline-loop
                         stock-modeline-refresh-seconds)))
 
+(defun stock--modeline-loop (_timer)
+  "Mode-line refresh loop."
+  (when stock--modeline-timer
+    (when (and (stock-weekday-p) (stock-trading-time-p))
+      (stock--modeline-fetch))
+    (stock--modeline-schedule)))
 
 ;;;###autoload
 (defun stock-modeline-mode (&optional arg)
   "Toggle stock display in mode-line.
-With prefix ARG, enable if ARG is positive, disable otherwise."
+With prefix ARG, enable if positive, disable otherwise."
   (interactive "P")
   (let ((enable (if arg
                     (> (prefix-numeric-value arg) 0)
-                  (not stock-modeline-timer))))
+                  (not stock--modeline-timer))))
     (if enable
         (progn
           (unless stock-modeline-stocks
@@ -597,34 +640,31 @@ With prefix ARG, enable if ARG is positive, disable otherwise."
             (if global-mode-string
                 (push '(:eval stock-modeline-string) global-mode-string)
               (setq global-mode-string '("" (:eval stock-modeline-string)))))
-          (setq stock-modeline-timer t)
-          (stock-modeline-fetch)
-          (stock-modeline-handle-refresh)
+          (setq stock--modeline-timer t)
+          (stock--modeline-fetch)
+          (stock--modeline-schedule)
           (message "Stock mode-line enabled."))
-      (setq stock-modeline-timer nil)
+      (setq stock--modeline-timer nil)
       (setq stock-modeline-string "")
       (setq global-mode-string
             (delete '(:eval stock-modeline-string) global-mode-string))
       (force-mode-line-update t)
       (message "Stock mode-line disabled."))))
 
-
 ;;;###autoload
 (defun stock-modeline-add (codes)
-  "Add stocks to mode-line display by CODES."
-  (interactive "sPlease input stock codes to add to mode-line: ")
+  "Add CODES (space-separated) to mode-line display."
+  (interactive "sEnter stock codes for mode-line: ")
   (let ((code-list (split-string codes)))
-    (stock-validate-request
+    (stock--validate-and-callback
      code-list
-     (lambda (resp)
-       (let ((valid-codes (mapcar #'car resp)))
+     (lambda (valid-entries)
+       (let ((valid-codes (mapcar #'car valid-entries)))
          (when valid-codes
            (setq stock-modeline-stocks
                  (delete-dups (append stock-modeline-stocks valid-codes)))
-           (stock-modeline-fetch)
-           (message "[%s] added to mode-line."
-                    (mapconcat 'identity valid-codes ", "))))))))
-
+           (stock--modeline-fetch)
+           (message "Mode-line: added [%s]" (string-join valid-codes ", "))))))))
 
 ;;;###autoload
 (defun stock-modeline-remove ()
@@ -632,103 +672,92 @@ With prefix ARG, enable if ARG is positive, disable otherwise."
   (interactive)
   (if (null stock-modeline-stocks)
       (message "No stocks in mode-line.")
-    (let* ((code (completing-read "Select stock to remove from mode-line: "
+    (let* ((code (completing-read "Remove from mode-line: "
                                   stock-modeline-stocks nil t))
-           (index (cl-position code stock-modeline-stocks :test 'string=)))
-      (when index
+           (idx (cl-position code stock-modeline-stocks :test #'string=)))
+      (when idx
         (setq stock-modeline-stocks
-              (stock-remove-nth-element stock-modeline-stocks index))
-        (stock-modeline-fetch)
-        (message "<%s> removed from mode-line." code)))))
+              (stock-remove-nth-element stock-modeline-stocks idx))
+        (stock--modeline-fetch)
+        (message "Mode-line: removed <%s>" code)))))
 
 
 ;;;;; header-line functions
 
-(defun stock-headerline-format-stock (entry)
-  "Format a single stock ENTRY for header-line display."
-  (stock--format-stock-entry entry stock-headerline-format))
-
-
-(defun stock-headerline-update-string (entries)
-  "Update `stock-headerline-string' with stock ENTRIES data."
-  (setq stock-headerline-data entries)
+(defun stock--headerline-update (entries)
+  "Update header-line with ENTRIES data."
+  (setq stock--headerline-data entries)
   (setq stock-headerline-string
         (if entries
-            (mapconcat #'stock-headerline-format-stock entries " ")
+            (mapconcat (lambda (e)
+                         (stock--format-line-entry e stock-headerline-format))
+                       entries " ")
           ""))
   (force-mode-line-update t))
 
-
-(defun stock-headerline-fetch ()
+(defun stock--headerline-fetch ()
   "Fetch stock data for header-line display."
   (when stock-headerline-stocks
-    (stock-request
-     (stock-make-request-url stock-api stock-headerline-stocks)
+    (stock--request
+     (stock--make-request-url stock-headerline-stocks)
      (lambda ()
-       (let ((entries (seq-filter
-                       #'stock-valid-entry-p
-                       (stock-format-content stock-headerline-stocks
-                                             (stock-parse-response)))))
-         (stock-headerline-update-string entries))))))
+       (let* ((resp (stock--parse-response))
+              (entries (stock--parse-response-to-entries
+                        stock-headerline-stocks resp))
+              (valid (seq-filter #'stock--entry-valid-p entries)))
+         (stock--headerline-update valid))))))
 
-
-(defun stock-headerline-loop-refresh (_timer)
-  "Loop to refresh header-line stock data."
-  (when stock-headerline-timer
-    (if (and (stock-weekday-p)
-             (stock-trading-time-p))
-        (stock-headerline-fetch))
-    (stock-headerline-handle-refresh)))
-
-
-(defun stock-headerline-handle-refresh ()
+(defun stock--headerline-schedule ()
   "Schedule next header-line refresh."
-  (when stock-headerline-timer
-    (stock-set-timeout #'stock-headerline-loop-refresh
+  (when stock--headerline-timer
+    (stock-set-timeout #'stock--headerline-loop
                         stock-headerline-refresh-seconds)))
 
+(defun stock--headerline-loop (_timer)
+  "Header-line refresh loop."
+  (when stock--headerline-timer
+    (when (and (stock-weekday-p) (stock-trading-time-p))
+      (stock--headerline-fetch))
+    (stock--headerline-schedule)))
 
 ;;;###autoload
 (defun stock-headerline-mode (&optional arg)
   "Toggle stock display in header-line.
-With prefix ARG, enable if ARG is positive, disable otherwise."
+With prefix ARG, enable if positive, disable otherwise."
   (interactive "P")
   (let ((enable (if arg
                     (> (prefix-numeric-value arg) 0)
-                  (not stock-headerline-timer))))
+                  (not stock--headerline-timer))))
     (if enable
         (progn
           (unless stock-headerline-stocks
             (setq stock-headerline-stocks stock-code-list))
           (setq-default header-line-format
                         '(:eval stock-headerline-string))
-          (setq stock-headerline-timer t)
-          (stock-headerline-fetch)
-          (stock-headerline-handle-refresh)
+          (setq stock--headerline-timer t)
+          (stock--headerline-fetch)
+          (stock--headerline-schedule)
           (message "Stock header-line enabled."))
-      (setq stock-headerline-timer nil)
+      (setq stock--headerline-timer nil)
       (setq stock-headerline-string "")
       (setq-default header-line-format nil)
       (force-mode-line-update t)
       (message "Stock header-line disabled."))))
 
-
 ;;;###autoload
 (defun stock-headerline-add (codes)
-  "Add stocks to header-line display by CODES."
-  (interactive "sPlease input stock codes to add to header-line: ")
+  "Add CODES (space-separated) to header-line display."
+  (interactive "sEnter stock codes for header-line: ")
   (let ((code-list (split-string codes)))
-    (stock-validate-request
+    (stock--validate-and-callback
      code-list
-     (lambda (resp)
-       (let ((valid-codes (mapcar #'car resp)))
+     (lambda (valid-entries)
+       (let ((valid-codes (mapcar #'car valid-entries)))
          (when valid-codes
            (setq stock-headerline-stocks
                  (delete-dups (append stock-headerline-stocks valid-codes)))
-           (stock-headerline-fetch)
-           (message "[%s] added to header-line."
-                    (mapconcat 'identity valid-codes ", "))))))))
-
+           (stock--headerline-fetch)
+           (message "Header-line: added [%s]" (string-join valid-codes ", "))))))))
 
 ;;;###autoload
 (defun stock-headerline-remove ()
@@ -736,53 +765,15 @@ With prefix ARG, enable if ARG is positive, disable otherwise."
   (interactive)
   (if (null stock-headerline-stocks)
       (message "No stocks in header-line.")
-    (let* ((code (completing-read "Select stock to remove from header-line: "
+    (let* ((code (completing-read "Remove from header-line: "
                                   stock-headerline-stocks nil t))
-           (index (cl-position code stock-headerline-stocks :test 'string=)))
-      (when index
+           (idx (cl-position code stock-headerline-stocks :test #'string=)))
+      (when idx
         (setq stock-headerline-stocks
-              (stock-remove-nth-element stock-headerline-stocks index))
-        (stock-headerline-fetch)
-        (message "<%s> removed from header-line." code)))))
+              (stock-remove-nth-element stock-headerline-stocks idx))
+        (stock--headerline-fetch)
+        (message "Header-line: removed <%s>" code)))))
 
 (provide 'stock)
 
 ;;; stock.el ends here
-
-;; 0：”大秦铁路”，股票名字；
-;; 1：”27.55″，今日开盘价；
-;; 2：”27.25″，昨日收盘价；
-;; 3：”26.91″，当前价格；
-;; 4：”27.55″，今日最高价；
-;; 5：”26.20″，今日最低价；
-;; 6：”26.91″，竞买价，即“买一”报价；
-;; 7：”26.92″，竞卖价，即“卖一”报价；
-;; 8：”22114263″，成交的股票数，由于股票交易以一百股为基本单位，所以在使用时，通常把该值除以一百；
-;; 9：”589824680″，成交金额，单位为“元”，为了一目了然，通常以“万元”为成交金额的单位，所以通常把该值除以一万；
-;; 10：”4695″，“买一”申请4695股，即47手；
-;; 11：”26.91″，“买一”报价；
-;; 12：”57590″，“买二”
-;; 13：”26.90″，“买二”
-;; 14：”14700″，“买三”
-;; 15：”26.89″，“买三”
-;; 16：”14300″，“买四”
-;; 17：”26.88″，“买四”
-;; 18：”15100″，“买五”
-;; 19：”26.87″，“买五”
-;; 20：”3100″，“卖一”申报3100股，即31手；
-;; 21：”26.92″，“卖一”报价
-;; (22, 23), (24, 25), (26,27), (28, 29)分别为“卖二”至“卖四的情况”
-;; 30：”2008-01-11″，日期；
-;; 31：”15:05:32″，时间；
-
-;; var hq_str_sh000001=\"上证指数,3261.9219,3268.6955,3245.3123,3262.0025,3216.9927,0,0,319906033,409976276121,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2023-03-14,15:30:39,00,\"
-
-;; ("sh000001" "上证指数" "3245.3123" "-0.72%" "3262.0025" "3216.9927" 3199060 "40997627W" "3261.9219" "3268.6955")
-
-;; var hq_str_sh603866=\"桃李面包,0.000,15.250,15.250,0.000,0.000,0.000,0.000,0,0.000,0,0.000,0,0.000,0,0.000,0,0.000,0,0.000,0,0.000,0,0.000,0,0.000,0,0.000,0,0.000,2023-03-27,09:11:30,00,\"
-
-;; var hq_str_sh603866=\"桃李面包,0.000,15.250,15.250,0.000,0.000,15.110,15.110,0,0.000,5100,15.110,2000,0.000,0,0.000,0,0.000,0,0.000,5100,15.110,0,0.000,0,0.000,0,0.000,0,0.000,2023-03-27,09:16:00,00,\"
-
-;; ("sh603866" ["sh603866" "桃李面包" "15.250" "0.00%" "0.000" "0.000" "0" "0W" "0.000" "15.250"])
-
-;; http://image.sinajs.cn/newchart/daily/n/sh601006.gif

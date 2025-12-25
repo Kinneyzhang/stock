@@ -1,0 +1,420 @@
+#+TITLE: Stock.el 开发设计文档
+#+AUTHOR: Kinney Zhang
+#+DATE: 2025
+#+OPTIONS: toc:3 num:t
+
+* 概述
+
+Stock.el 是一个 Emacs Lisp 插件，用于在 Emacs 中显示 A 股实时行情数据。
+
+** 技术栈
+
+- Emacs Lisp (elisp)
+- 新浪财经 HTTP API
+- tabulated-list-mode（表格显示）
+- url.el（HTTP 请求）
+
+** 文件结构
+
+#+begin_src text
+stock/
+├── stock.el          # 主入口，UI 和命令
+├── stock-utils.el    # 工具函数库
+├── docs/
+│   ├── USER-GUIDE.org    # 用户文档
+│   └── DESIGN.org        # 设计文档（本文件）
+├── imgs/
+│   └── stock.png         # 截图
+└── README.org            # 项目说明
+#+end_src
+
+* 数据结构
+
+** 核心数据结构：Stock Plist
+
+从 API 获取的股票数据使用 *plist* 结构存储，相比 vector 具有更好的可读性：
+
+#+begin_src emacs-lisp
+;; 股票数据 plist 结构
+(:code          "sh600036"      ; 股票代码
+ :name          "招商银行"      ; 股票名称
+ :price         "42.50"         ; 当前价格
+ :change-percent "+1.23%"       ; 涨跌幅
+ :high          "43.00"         ; 今日最高
+ :low           "42.00"         ; 今日最低
+ :volume        "123456"        ; 成交量（手）
+ :turnover      "5678W"         ; 成交额（万元）
+ :open          "42.10"         ; 开盘价
+ :yestclose     "42.00")        ; 昨收价
+#+end_src
+
+** 数据条目格式（Entry）
+
+内部使用 =(CODE . PLIST)= 格式传递数据：
+
+#+begin_src emacs-lisp
+;; Entry 格式
+("sh600036" . (:code "sh600036" :name "招商银行" ...))
+#+end_src
+
+** 表格显示格式
+
+转换为 =tabulated-list-mode= 格式时：
+
+#+begin_src emacs-lisp
+;; (ID VECTOR PLIST) - PLIST 用于排序访问
+("sh600036" ["sh600036" "招商银行" "42.50" "+1.23%" ...] (:code ...))
+#+end_src
+
+* 模块架构
+
+** stock-utils.el - 工具层
+
+提供底层工具函数，不依赖业务逻辑。
+
+*** Plist 操作
+
+#+begin_src emacs-lisp
+;; 获取值
+(stock-plist-get stock :price)
+
+;; 设置值（返回新 plist）
+(stock-plist-put stock :price "43.00")
+
+;; 创建 plist
+(stock-make-plist code name price ...)
+
+;; 转换为 vector
+(stock-plist-to-vector plist)
+
+;; 验证有效性
+(stock-plist-valid-p stock)
+#+end_src
+
+*** 计算函数
+
+#+begin_src emacs-lisp
+;; 计算涨跌幅
+(stock-make-percent price yestclose open)
+;; => "+1.23%" 或 "-0.45%"
+
+;; 格式化成交量（除以100得到手数）
+(stock-format-volume volume-str)
+
+;; 格式化成交额（除以10000得到万元）
+(stock-format-turnover turnover-str)
+#+end_src
+
+*** 时间函数
+
+#+begin_src emacs-lisp
+;; 检查是否交易时间
+(stock-trading-time-p)
+;; => t (9:00-11:30 或 13:00-15:00)
+
+;; 检查是否工作日
+(stock-weekday-p)
+;; => t (周一至周五)
+
+;; 检查是否工作时间且缓冲区可见
+(stock-working-time-p buffer-name)
+#+end_src
+
+*** 定时器
+
+#+begin_src emacs-lisp
+;; 延时执行（类似 JavaScript setTimeout）
+(stock-set-timeout callback seconds)
+#+end_src
+
+*** 缓存函数
+
+#+begin_src emacs-lisp
+;; 读取缓存
+(stock-read-cache path)
+;; => '("sh600036" "sz000625" ...)
+
+;; 写入缓存
+(stock-write-cache path codes)
+#+end_src
+
+** stock.el - 业务层
+
+*** API 请求函数
+
+#+begin_src emacs-lisp
+;; 构建 URL
+(stock--make-request-url codes)
+;; => "https://hq.sinajs.cn/list=sh600036,sz000625"
+
+;; 发送请求
+(stock--request url callback)
+
+;; 解析响应
+(stock--parse-response)
+;; => "var hq_str_sh600036=\"招商银行,42.10,...\""
+#+end_src
+
+*** 数据解析函数
+
+#+begin_src emacs-lisp
+;; 解析单个股票的原始数据
+(stock--parse-raw-values code resp-str)
+;; => ("招商银行" "42.10" "42.00" "42.50" ...)
+
+;; 原始数据转 plist
+(stock--raw-to-plist code values)
+;; => (:code "sh600036" :name "招商银行" ...)
+
+;; 批量解析
+(stock--parse-response-to-entries codes resp-str)
+;; => (("sh600036" . (:code ...)) ("sz000625" . (:code ...)))
+
+;; 验证条目有效性
+(stock--entry-valid-p entry)
+#+end_src
+
+*** 显示转换函数
+
+#+begin_src emacs-lisp
+;; plist 转 vector（用于表格）
+(stock--plist-to-vector plist)
+
+;; entry 转表格格式
+(stock--entry-to-tabulated entry)
+;; => (ID VECTOR PLIST)
+#+end_src
+
+*** Face 处理函数
+
+#+begin_src emacs-lisp
+;; 根据涨跌幅获取 face
+(stock--get-change-face percent-str)
+;; => 'stock-face-up / 'stock-face-down / 'stock-face-constant
+
+;; 应用 face 到条目
+(stock--propertize-entry entry)
+
+;; 移除 face
+(stock--remove-entry-faces entry)
+#+end_src
+
+*** 渲染函数
+
+#+begin_src emacs-lisp
+;; 渲染缓冲区
+(stock--render-buffer buffer-name &optional manual)
+
+;; 获取数据并渲染
+(stock--fetch-and-render buffer-name codes &optional callback)
+
+;; 验证并回调
+(stock--validate-and-callback codes callback)
+#+end_src
+
+*** 定时刷新机制
+
+#+begin_src emacs-lisp
+;; 刷新循环
+(stock--loop-refresh timer)
+  -> (stock-working-time-p ...) ; 检查是否工作时间
+  -> (stock--fetch-and-render ...) ; 获取并渲染
+  -> (stock--schedule-refresh) ; 安排下次刷新
+
+;; 安排刷新
+(stock--schedule-refresh)
+  -> (stock-set-timeout #'stock--loop-refresh seconds)
+#+end_src
+
+* API 接口
+
+** 新浪财经 API
+
+*** 请求格式
+
+#+begin_src text
+GET https://hq.sinajs.cn/list=sh600036,sz000625
+Referer: https://finance.sina.com.cn
+#+end_src
+
+*** 响应格式
+
+#+begin_src javascript
+var hq_str_sh600036="招商银行,42.10,42.00,42.50,43.00,42.00,42.48,42.49,12345600,52345678900,...";
+#+end_src
+
+*** 响应字段说明（逗号分隔）
+
+| 索引 | 含义         | 示例        |
+|------+--------------+-------------|
+| 0    | 股票名称     | 招商银行    |
+| 1    | 今日开盘价   | 42.10       |
+| 2    | 昨日收盘价   | 42.00       |
+| 3    | 当前价格     | 42.50       |
+| 4    | 今日最高价   | 43.00       |
+| 5    | 今日最低价   | 42.00       |
+| 6    | 买一价       | 42.48       |
+| 7    | 卖一价       | 42.49       |
+| 8    | 成交股数     | 12345600    |
+| 9    | 成交金额(元) | 52345678900 |
+| 10   | 买一量       | 4695        |
+| 11   | 买一价       | 42.48       |
+| ...  | ...          | ...         |
+| 30   | 日期         | 2025-01-15  |
+| 31   | 时间         | 14:30:00    |
+
+* 主要命令
+
+** 用户命令
+
+| 命令                    | 功能           | 实现位置    |
+|-------------------------+----------------+-------------|
+| =stock=                 | 打开主看板     | stock.el    |
+| =stock-refresh=         | 刷新数据       | stock.el    |
+| =stock-search=          | 搜索股票       | stock.el    |
+| =stock-add=             | 添加自选股     | stock.el    |
+| =stock-remove=          | 删除自选股     | stock.el    |
+| =stock-switch-colouring= | 切换颜色      | stock.el    |
+| =stock-modeline-mode=   | 模式栏显示     | stock.el    |
+| =stock-headerline-mode= | 标题栏显示     | stock.el    |
+
+** 内部变量
+
+| 变量                     | 类型     | 说明               |
+|--------------------------+----------+--------------------|
+| =stock--favorite-codes=  | list     | 自选股代码列表     |
+| =stock--entry-cache=     | list     | 缓存的股票数据     |
+| =stock--search-codes=    | list     | 搜索的股票代码     |
+| =stock--modeline-timer=  | boolean  | 模式栏定时器状态   |
+| =stock--headerline-timer= | boolean  | 标题栏定时器状态   |
+
+* Face 定义
+
+| Face                    | 继承自                       | 用途       |
+|-------------------------+------------------------------+------------|
+| =stock-face-up=         | error                        | 上涨（红） |
+| =stock-face-down=       | success                      | 下跌（绿） |
+| =stock-face-constant=   | shadow                       | 持平（灰） |
+| =stock-face-index-name= | font-lock-keyword-face, bold | 指数名称   |
+
+* Major Mode
+
+=stock-visual-mode= 继承自 =tabulated-list-mode=：
+
+#+begin_src emacs-lisp
+(define-derived-mode stock-visual-mode tabulated-list-mode "Stock"
+  "Major mode for A-share stock real-time dashboard."
+  (setq tabulated-list-format stock--visual-columns)
+  (setq tabulated-list-sort-key nil)
+  (add-hook 'tabulated-list-revert-hook #'stock-refresh nil t)
+  (tabulated-list-init-header)
+  (when (fboundp 'tablist-minor-mode)
+    (tablist-minor-mode)))
+#+end_src
+
+** 键绑定
+
+| 键   | 命令                    |
+|------+-------------------------|
+| =+=  | stock-add               |
+| =_=  | stock-remove            |
+| =c=  | stock-switch-colouring  |
+| =g=  | stock-refresh           |
+| =s=  | stock-search            |
+
+* 扩展开发
+
+** 添加新的数据字段
+
+1. 修改 =stock--raw-to-plist= 解析新字段
+2. 修改 =stock--plist-to-vector= 包含新字段
+3. 修改 =stock--visual-columns= 添加新列
+
+** 添加新的显示方式
+
+参考 =stock-modeline-mode= 实现：
+
+1. 定义数据变量：=stock--xxx-data=
+2. 定义显示字符串：=stock-xxx-string=
+3. 定义定时器：=stock--xxx-timer=
+4. 实现获取函数：=stock--xxx-fetch=
+5. 实现更新函数：=stock--xxx-update=
+6. 实现刷新循环：=stock--xxx-loop=
+7. 实现切换命令：=stock-xxx-mode=
+
+** 添加新的数据源
+
+1. 定义新的 API URL
+2. 实现新的解析函数
+3. 调整字段映射
+
+* 性能考虑
+
+- 使用异步 HTTP 请求（=url-retrieve=）
+- 只在交易时段刷新数据
+- 合并多个股票为单次请求
+- 使用定时器而非轮询
+
+* 代码规范
+
+** 命名规范
+
+- 公共函数：=stock-xxx=
+- 内部函数：=stock--xxx=（双横线）
+- 自定义选项：=stock-xxx=
+- 内部变量：=stock--xxx=
+
+** 文档规范
+
+- 每个函数必须有 docstring
+- 使用英文 docstring
+- 参数说明清晰完整
+
+** 示例 docstring
+
+#+begin_src emacs-lisp
+(defun stock--parse-raw-values (code resp-str)
+  "Extract values for CODE from API response RESP-STR.
+Returns list of comma-separated values or nil if not found."
+  ...)
+#+end_src
+
+* 依赖关系
+
+#+begin_src text
+stock.el
+├── cl-lib (built-in)
+├── url (built-in)
+└── stock-utils.el
+    └── cl-lib (built-in)
+#+end_src
+
+可选依赖：
+- =tablist=：提供更好的表格交互（列过滤、多选等）
+
+* 测试建议
+
+** 单元测试
+
+#+begin_src emacs-lisp
+;; 测试 plist 操作
+(ert-deftest stock-test-make-percent ()
+  (should (string= (stock-make-percent 42.5 42.0 42.1) "+1.19%"))
+  (should (string= (stock-make-percent 41.5 42.0 42.1) "-1.19%"))
+  (should (string= (stock-make-percent 42.0 42.0 0) "0.00%")))
+#+end_src
+
+** 集成测试
+
+- 验证 API 请求正常
+- 验证数据解析正确
+- 验证 UI 渲染正确
+
+* 更新日志
+
+** v1.0 (2025)
+
+- 重构数据结构为 plist
+- 改进代码组织和注释
+- 添加完整文档
+- 支持 tablist-minor-mode（可选）
