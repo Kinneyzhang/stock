@@ -514,11 +514,11 @@ CODES: string of stocks list."
 ;;;;; mode-line and header-line common functions
 
 (defun stock-format-stock-string (format-str name percent)
-  "Format stock string by replacing %n with NAME and %p with PERCENT in FORMAT-STR."
-  (let ((result format-str))
-    (setq result (replace-regexp-in-string "%n" name result t t))
-    (setq result (replace-regexp-in-string "%p" percent result t t))
-    result))
+  "Format stock string by replacing %n with NAME and %p with PERCENT in FORMAT-STR.
+Uses `format-spec' for efficient single-pass string replacement."
+  (format-spec format-str
+               `((?n . ,name)
+                 (?p . ,percent))))
 
 
 (defun stock--format-stock-entry (entry format-str)
