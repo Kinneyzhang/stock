@@ -50,7 +50,8 @@
 (require 'url)
 (require 'stock-utils)
 
-;; Declare external variable to avoid compiler warning
+;; Declare external variable from url.el to avoid byte-compiler warning.
+;; This variable holds the HTTP response status code after url-retrieve.
 (defvar url-http-response-status)
 
 ;;;; Customization
@@ -405,6 +406,9 @@ If MANUAL is t and `stock-colouring' is nil, remove faces."
     (when (and manual (not stock-colouring))
       (setq entries (mapcar #'stock--remove-entry-faces tabulated-entries)))
     (with-current-buffer buffer-name
+      ;; Convert to tabulated-list format: (ID VECTOR)
+      ;; The plist (third element) was used for sorting but is not needed
+      ;; by tabulated-list-mode, so we extract only ID and VECTOR.
       (setq tabulated-list-entries
             (mapcar (lambda (e) (list (car e) (cadr e))) entries))
       (tabulated-list-print t t))))
@@ -773,6 +777,62 @@ With prefix ARG, enable if positive, disable otherwise."
               (stock-remove-nth-element stock-headerline-stocks idx))
         (stock--headerline-fetch)
         (message "Header-line: removed <%s>" code)))))
+
+;;;; Variable Watchers
+
+(defun stock--on-code-list-change (_symbol newval _operation _where)
+  "Handle changes to `stock-code-list'.
+NEWVAL is the new value being set.
+Automatically refreshes the dashboard when stock-code-list changes."
+  (when (and (stock--timer-alive-p)
+             (listp newval))
+    ;; Update favorites to match the new code list
+    (setq stock--favorite-codes newval)
+    (stock-write-cache stock-cache-path stock--favorite-codes)
+    ;; Refresh the dashboard
+    (stock--fetch-and-render
+     stock-buffer-name
+     (append stock-index-list stock--favorite-codes)
+     (lambda (_)
+       (message "Stock list updated: %d stocks"
+                (length stock--favorite-codes))))))
+
+(defun stock--on-index-list-change (_symbol newval _operation _where)
+  "Handle changes to `stock-index-list'.
+NEWVAL is the new value being set.
+Automatically refreshes the dashboard when stock-index-list changes."
+  (when (and (stock--timer-alive-p)
+             (listp newval))
+    ;; Refresh the dashboard with new index list
+    (stock--fetch-and-render
+     stock-buffer-name
+     (append newval stock--favorite-codes)
+     (lambda (_)
+       (message "Index list updated: %d indices" (length newval))))))
+
+(defun stock--on-modeline-stocks-change (_symbol newval _operation _where)
+  "Handle changes to `stock-modeline-stocks'.
+NEWVAL is the new value being set.
+Automatically refreshes the mode-line when stock-modeline-stocks changes."
+  (when (and stock--modeline-timer
+             (listp newval))
+    (stock--modeline-fetch)))
+
+(defun stock--on-headerline-stocks-change (_symbol newval _operation _where)
+  "Handle changes to `stock-headerline-stocks'.
+NEWVAL is the new value being set.
+Automatically refreshes the header-line when stock-headerline-stocks changes."
+  (when (and stock--headerline-timer
+             (listp newval))
+    (stock--headerline-fetch)))
+
+;; Register variable watchers
+;; Note: add-variable-watcher requires Emacs 26.1+
+(when (fboundp 'add-variable-watcher)
+  (add-variable-watcher 'stock-code-list #'stock--on-code-list-change)
+  (add-variable-watcher 'stock-index-list #'stock--on-index-list-change)
+  (add-variable-watcher 'stock-modeline-stocks #'stock--on-modeline-stocks-change)
+  (add-variable-watcher 'stock-headerline-stocks #'stock--on-headerline-stocks-change))
 
 (provide 'stock)
 

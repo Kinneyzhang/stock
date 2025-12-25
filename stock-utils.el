@@ -259,7 +259,8 @@ Returns a comparison function for descending numeric sort."
                   (plist-get (cadr b) key))))
       (> val-a val-b))))
 
-;; Legacy compatibility - keeping old function name for backward compatibility
+;; Backward compatibility aliases for renamed functions.
+;; These are deprecated and may be removed in future versions.
 (defalias 'stock-readcache 'stock-read-cache)
 (defalias 'stock-writecache 'stock-write-cache)
 

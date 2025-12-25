@@ -226,6 +226,32 @@ stock/
   -> (stock-set-timeout #'stock--loop-refresh seconds)
 #+end_src
 
+*** Variable Watcher 机制
+
+使用 =add-variable-watcher= 监控配置变量变化，实现实时刷新：
+
+#+begin_src emacs-lisp
+;; 监控 stock-code-list 变化
+(stock--on-code-list-change symbol newval operation where)
+  -> 更新 stock--favorite-codes
+  -> 写入缓存
+  -> 刷新看板
+
+;; 监控 stock-index-list 变化
+(stock--on-index-list-change symbol newval operation where)
+  -> 刷新看板
+
+;; 监控 stock-modeline-stocks 变化
+(stock--on-modeline-stocks-change symbol newval operation where)
+  -> 刷新模式栏
+
+;; 监控 stock-headerline-stocks 变化
+(stock--on-headerline-stocks-change symbol newval operation where)
+  -> 刷新标题栏
+#+end_src
+
+*注意*：=add-variable-watcher= 需要 Emacs 26.1+。
+
 * API 接口
 
 ** 新浪财经 API
@@ -418,3 +444,4 @@ stock.el
 - 改进代码组织和注释
 - 添加完整文档
 - 支持 tablist-minor-mode（可选）
+- 添加 variable watcher 支持，修改变量时自动刷新界面
