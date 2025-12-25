@@ -22,25 +22,19 @@ Download el file to your load-path.
 #+END_SRC
 
 * Customization
-| Variable                  | Default                                 | type    | Description                                                                             |
-|---------------------------+-----------------------------------------+---------+-----------------------------------------------------------------------------------------|
-| stock-index-list         | '("sh000001" "sz399001" "sz399006")     | list    | List of composite index.                                                                |
-| stock-code-list         | '("sh600036" "sz000625")                | list    | List of stocks.                                                                         |
-| stock-buffer-name        | "*A Chive*"                               | string  | Buffer name of stock board.                                                            |
-| stock-search-buffer-name | "*A Chive - results -*"                   | string  | Buffer name of stock search board.                                                     |
-| stock-auto-refresh       | t                                       | boolean | Whether to refresh automatically.                                                       |
-| stock-refresh-seconds    | 5                                       | integer | Seconds of automatic refresh time.                                                      |
-| stock-cache-path         | (concat user-emacs-directory ".stock") | string  | Path of cache.                                                                          |
-| stock-colouring          | t                                       | boolean | Whether to apply face. If it's nil will be low-key, you can peek at it at company time. |
-| stock-modeline-stocks    | nil                                     | list    | List of stock codes to display in mode-line.                                            |
-| stock-modeline-refresh-seconds | 10                                 | integer | Seconds between mode-line refresh.                                                      |
-| stock-modeline-format    | " [%n:%p] "                             | string  | Format string for each stock in mode-line. %n=name, %p=change percent.                  |
-| stock-tabbar-stocks      | nil                                     | list    | List of stock codes to display in tab-bar.                                              |
-| stock-tabbar-format      | " [%n:%p] "                             | string  | Format string for each stock in tab-bar. %n=name, %p=change percent.                    |
-| stock-tabbar-refresh-seconds | 10                                  | integer | Seconds between tab-bar refresh.                                                        |
-| stock-tabline-stocks     | nil                                     | list    | List of stock codes to display in tab-line.                                             |
-| stock-tabline-format     | " [%n:%p] "                             | string  | Format string for each stock in tab-line. %n=name, %p=change percent.                   |
-| stock-tabline-refresh-seconds | 10                                 | integer | Seconds between tab-line refresh.                                                       |
+| Variable                       | Default                                | type    | Description                                                                             |
+|--------------------------------+----------------------------------------+---------+-----------------------------------------------------------------------------------------|
+| stock-index-list               | '("sh000001" "sz399001" "sz399006")    | list    | List of composite index.                                                                |
+| stock-code-list                | '("sh600036" "sz000625")               | list    | List of stocks.                                                                         |
+| stock-buffer-name              | "*A Chive*"                            | string  | Buffer name of stock board.                                                             |
+| stock-search-buffer-name       | "*A Chive - results -*"                | string  | Buffer name of stock search board.                                                      |
+| stock-auto-refresh             | t                                      | boolean | Whether to refresh automatically.                                                       |
+| stock-refresh-seconds          | 5                                      | integer | Seconds of automatic refresh time.                                                      |
+| stock-cache-path               | (concat user-emacs-directory ".stock") | string  | Path of cache.                                                                          |
+| stock-colouring                | t                                      | boolean | Whether to apply face. If it's nil will be low-key, you can peek at it at company time. |
+| stock-modeline-stocks          | nil                                    | list    | List of stock codes to display in mode-line.                                            |
+| stock-modeline-refresh-seconds | 10                                     | integer | Seconds between mode-line refresh.                                                      |
+| stock-modeline-format          | " [%n:%p] "                            | string  | Format string for each stock in mode-line. %n=name, %p=change percent.                  |
 
 * Command
 | Command                 | Description                                          |
@@ -54,12 +48,6 @@ Download el file to your load-path.
 | stock-modeline-mode    | Toggle stock price display in mode-line.             |
 | stock-modeline-add     | Add stocks to mode-line display.                     |
 | stock-modeline-remove  | Remove a stock from mode-line display.               |
-| stock-tabbar-mode      | Toggle stock price display in tab-bar.               |
-| stock-tabbar-add       | Add stocks to tab-bar display.                       |
-| stock-tabbar-remove    | Remove a stock from tab-bar display.                 |
-| stock-tabline-mode     | Toggle stock price display in tab-line.              |
-| stock-tabline-add      | Add stocks to tab-line display.                      |
-| stock-tabline-remove   | Remove a stock from tab-line display.                |
 
 * Mode-line Display
 You can display real-time stock price changes directly in the mode-line.
@@ -70,28 +58,6 @@ You can display real-time stock price changes directly in the mode-line.
   
   ;; Enable mode-line display
   (stock-modeline-mode 1)
-#+END_SRC
-
-* Tab-bar Display
-You can also display real-time stock price changes in the tab-bar.
-
-#+BEGIN_SRC lisp
-  ;; Configure stocks to show in tab-bar
-  (setq stock-tabbar-stocks '("sh600036" "sz000625"))
-  
-  ;; Enable tab-bar display
-  (stock-tabbar-mode 1)
-#+END_SRC
-
-* Tab-line Display
-You can display real-time stock price changes in the tab-line.
-
-#+BEGIN_SRC lisp
-  ;; Configure stocks to show in tab-line
-  (setq stock-tabline-stocks '("sh600036" "sz000625"))
-  
-  ;; Enable tab-line display
-  (stock-tabline-mode 1)
 #+END_SRC
 
 * For traders
