@@ -90,7 +90,6 @@
   :group 'stock
   :type 'string)
 
-
 (defcustom stock-colouring t
   "Whether to apply face.
 If it's nil will be low-key, you can peek at it at company time."
@@ -111,7 +110,7 @@ Example: \\='(\"sh600036\" \"sz000625\")."
   :type 'integer)
 
 
-(defcustom stock-modeline-format " [%n:%p] "
+(defcustom stock-modeline-format "[%s:%s] "
   "Format string for each stock in mode-line.
 %n - stock name, %p - change percent."
   :group 'stock
@@ -491,13 +490,9 @@ CODES: string of stocks list."
          (face (cond
                 ((> percent-number 0) 'stock-face-up)
                 ((< percent-number 0) 'stock-face-down)
-                (t 'stock-face-constant)))
-         (formatted (replace-regexp-in-string
-                     "%n" name
-                     (replace-regexp-in-string
-                      "%p" percent
-                      stock-modeline-format))))
-    (propertize formatted 'face face)))
+                (t 'stock-face-constant))))
+    (propertize (format stock-modeline-format name percent)
+                'face face)))
 
 
 (defun stock-modeline-update-string (entries)
@@ -519,7 +514,7 @@ CODES: string of stocks list."
        (let ((entries (seq-filter
                        #'stock-valid-entry-p
                        (stock-format-content stock-modeline-stocks
-                                              (stock-parse-response)))))
+                                             (stock-parse-response)))))
          (stock-modeline-update-string entries))))))
 
 
