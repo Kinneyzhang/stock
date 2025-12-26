@@ -392,7 +392,8 @@ ENTRY is (ID VECTOR PLIST) format."
       (aset vec 0 (propertize (aref vec 0) 'face 'stock-face-index-name))
       (aset vec 1 (propertize (aref vec 1) 'face 'stock-face-index-name)))
     ;; Apply change face to percent
-    (aset vec 3 (propertize (aref vec 3) 'face (stock--get-change-face percent)))
+    (aset vec 3 (propertize (aref vec 3)
+                            'face (stock--get-change-face percent)))
     entry))
 
 (defun stock--remove-entry-faces (entry)
@@ -682,12 +683,11 @@ ENTRY is (CODE . PLIST)."
   (let* ((plist (cdr entry))
          (name (plist-get plist :name))
          (percent (plist-get plist :change-percent))
-         (face (stock--get-change-face percent)))
-    (propertize (format-spec format-str
-                             `((?n . ,name)
-                               (?p . ,percent)))
-                'face face)))
-
+         (face (stock--get-change-face percent))
+         (fmtstr (format-spec format-str `((?n . ,name)
+                                           (?p . ,percent))))
+         (fmtstr (string-replace "%" "%%" fmtstr)))
+    (propertize fmtstr 'face face)))
 
 ;;;; Mode-line Functions
 
