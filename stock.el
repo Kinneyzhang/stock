@@ -245,8 +245,8 @@ Keys are \"CODE:FIELD\" strings, values are the display values.")
 
 (defconst stock--visual-columns
   (vector
-   '("股票代码" 8 nil)
-   '("名称" 10 nil)
+   '("股票代码" 8 t)
+   '("名称" 10 t)
    (list "当前价" 10 (stock--make-plist-sorter :price))
    (list "涨跌幅" 7 (stock--make-plist-sorter :change-percent))
    (list "最高价" 10 (stock--make-plist-sorter :high))
